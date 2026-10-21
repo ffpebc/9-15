@@ -2229,6 +2229,16 @@ let cachedQuestionBank: {
   byId: Map<string, TrainerQuestion>;
 } | null = null;
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('ege-bank-loaded', () => {
+    cachedQuestionBank = null;
+  });
+}
+
+export function invalidateQuestionBankCache() {
+  cachedQuestionBank = null;
+}
+
 export function getTrainerBank() {
   if (cachedQuestionBank) return cachedQuestionBank;
 

@@ -1401,6 +1401,12 @@ const getFullDatabaseEntries = (): DictEntry[] => {
   return cachedFullDatabaseEntries;
 };
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('ege-bank-loaded', () => {
+    cachedFullDatabaseEntries = null;
+  });
+}
+
 export const DictionaryModal: React.FC<DictionaryModalProps> = React.memo(({
   isOpen,
   onClose,
@@ -1409,13 +1415,23 @@ export const DictionaryModal: React.FC<DictionaryModalProps> = React.memo(({
   const [filterTask, setFilterTask] = useState<'all' | TaskId>('all');
   const [sourceMode, setSourceMode] = useState<'all' | 'traps'>('all');
   const [query, setQuery] = useState('');
+  const [bankRev, setBankRev] = useState(0);
   const hasOpenedRef = useRef(isOpen);
   if (isOpen) hasOpenedRef.current = true;
+
+  useEffect(() => {
+    const onLoaded = () => {
+      cachedFullDatabaseEntries = null;
+      setBankRev((r) => r + 1);
+    };
+    window.addEventListener('ege-bank-loaded', onLoaded);
+    return () => window.removeEventListener('ege-bank-loaded', onLoaded);
+  }, []);
 
   const hasOpened = hasOpenedRef.current;
   const fullEntries = useMemo(
     () => (hasOpened ? getFullDatabaseEntries() : FIPI_DICTIONARY),
-    [hasOpened]
+    [hasOpened, bankRev]
   );
 
   const activePool = sourceMode === 'traps' ? FIPI_DICTIONARY : fullEntries;
