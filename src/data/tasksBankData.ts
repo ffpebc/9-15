@@ -93,18 +93,16 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
     } catch {}
   }
 
-  // 1. Попытка загрузить из локального сервера разработки (если файл есть локально)
+  // 1. Попытка загрузить из локального сервера (только если файл полный, не урезанный)
   const filename = url.split('/').pop();
   try {
     const localRes = await fetch(`/src/data/${filename}`);
     if (localRes.ok) {
       const data = await localRes.json();
-      if (cache) {
-        try {
-          await cache.put(url, new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } }));
-        } catch {}
+      const count = Array.isArray(data) ? data.length : data?.words?.length || 0;
+      if (count >= 15000 || (url.includes('fipiTasks') && count >= 2000) || (url.includes('sprint') && count >= 10000)) {
+        return data;
       }
-      return data;
     }
   } catch {}
 
