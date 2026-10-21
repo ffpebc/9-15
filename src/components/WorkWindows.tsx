@@ -1316,30 +1316,36 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
     map.set(item.word.toLowerCase().trim(), item);
   });
 
-  // 2. Real parsed words database from exam variants
-  if (Array.isArray(PARSED_WORDS_DATABASE)) {
-    PARSED_WORDS_DATABASE.forEach((item) => {
-      const displayWord = item.word || '—';
-      const cleanContext = item.context
-        ? (item.context.startsWith('(') ? item.context : `(${item.context})`)
-        : '';
-      const fullLabel = cleanContext ? `${displayWord} ${cleanContext}` : displayWord;
-      const key = (displayWord + '_' + item.task + '_' + cleanContext).toLowerCase().trim();
-      if (!map.has(key)) {
-        map.set(key, {
-          task: item.task,
-          word: fullLabel,
-          highlight: item.missingLetter || (item as any).letter || '—',
-          category: item.category || TASK_META[item.task]?.title || `Задание № ${item.task}`,
-          note: item.rule || (item as any).explanation || '',
-          source: item.source || 'ФИПИ 2026–2027',
-        });
-      }
-    });
-  }
+  // 2. Real parsed words database from exam variants (all 18,070 authentic words)
+  const wordsList: any[] = Array.isArray(PARSED_WORDS)
+    ? PARSED_WORDS
+    : Array.isArray(PARSED_WORDS_DATABASE)
+      ? (PARSED_WORDS_DATABASE as any)
+      : typeof PARSED_WORDS_DATABASE === 'object' && PARSED_WORDS_DATABASE !== null
+        ? Object.values(PARSED_WORDS_DATABASE).flat()
+        : [];
 
-  // 3. Sprint questions authentic words
-  if (Array.isArray(PARSED_SPRINT_QUESTIONS)) {
+  wordsList.forEach((item) => {
+    const displayWord = item.word || '—';
+    const cleanContext = item.context
+      ? (item.context.startsWith('(') ? item.context : `(${item.context})`)
+      : '';
+    const fullLabel = cleanContext ? `${displayWord} ${cleanContext}` : displayWord;
+    const key = item.id || (displayWord + '_' + item.task + '_' + cleanContext).toLowerCase().trim();
+    if (!map.has(key)) {
+      map.set(key, {
+        task: item.task,
+        word: fullLabel,
+        highlight: item.missingLetter || (item as any).letter || '—',
+        category: item.category || (item as any).topic || TASK_META[item.task]?.title || `Задание № ${item.task}`,
+        note: item.rule || (item as any).explanation || '',
+        source: item.source || 'ФИПИ 2026–2027',
+      });
+    }
+  });
+
+  // 3. Fallback: only if main words bank is empty, populate from sprint questions
+  if (wordsList.length === 0 && Array.isArray(PARSED_SPRINT_QUESTIONS)) {
     PARSED_SPRINT_QUESTIONS.forEach((sq) => {
       const fullWord = (sq.prefix || '') + (sq.answer || '') + (sq.suffix || '');
       const cleanContext = sq.context

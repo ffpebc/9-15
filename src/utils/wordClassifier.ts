@@ -39,14 +39,16 @@ export function classifyWordSubtopicAndException(
 
   if (task === '9') {
     // 1. -ГАР-/-ГОР-
+    const hasGarGorRoot = /(?:гар|гор)/.test(w);
     const isGarGor =
-      expl.includes('гар/гор') ||
-      expl.includes('гор/гар') ||
-      expl.includes('-гар-') ||
-      expl.includes('-гор-') ||
-      (/^(?:вы|из|при|за|у|по|воз|до|об|пере|с|на|раз|про)?г$/.test(p) &&
-        /^р(ать|еть|ел|ан|ающ|ар|ок|ки|ь|яч|юч|$)/.test(s) &&
-        !/^(гориз|горист|горделив|горчиц|горд|горе|огорч|гардер|гармон|гарант|гарнир|гарниз|гарпун)/.test(w));
+      hasGarGorRoot &&
+      (expl.includes('гар/гор') ||
+        expl.includes('гор/гар') ||
+        expl.includes('-гар-') ||
+        expl.includes('-гор-') ||
+        (/^(?:вы|из|при|за|у|по|воз|до|об|пере|с|на|раз|про)?г$/.test(p) &&
+          /^р(ать|еть|ел|ан|ающ|ар|ок|ки|ь|яч|юч|$)/.test(s))) &&
+      !/^(гориз|горист|горделив|горчиц|горд|горе|огорч|гардер|гармон|гарант|гарнир|гарниз|гарпун)/.test(w);
     if (isGarGor) {
       const isExc = /^(выгарк|изгар|пригар)/.test(w) || directExplException;
       return {
@@ -57,12 +59,14 @@ export function classifyWordSubtopicAndException(
     }
 
     // 2. -ЗАР-/-ЗОР-
+    const hasZarZorRoot = /(?:зар|зор)/.test(w);
     const isZarZor =
-      expl.includes('зар/зор') ||
-      expl.includes('зор/зар') ||
-      expl.includes('-зар-') ||
-      expl.includes('-зор-') ||
-      (/^(?:о|оз|про)?з$/.test(p) && /^(рниц|рницы|рени|рен|рев|рянк|ри|рь|ревой|ревать)/.test(s));
+      hasZarZorRoot &&
+      (expl.includes('зар/зор') ||
+        expl.includes('зор/зар') ||
+        expl.includes('-зар-') ||
+        expl.includes('-зор-') ||
+        (/^(?:о|оз|про)?з$/.test(p) && /^(рниц|рницы|рени|рен|рев|рянк|ри|рь|ревой|ревать)/.test(s)));
     if (isZarZor) {
       const isExc = /^(зорев|зорянк)/.test(w) || directExplException;
       return {
@@ -73,17 +77,19 @@ export function classifyWordSubtopicAndException(
     }
 
     // 3. -КАС-/-КОС-
+    const hasKasKosRoot = /(?:кас|кос)/.test(w);
     const isKasKos =
-      expl.includes('кас/кос') ||
-      expl.includes('кос/кас') ||
-      expl.includes('-кас-') ||
-      expl.includes('-кос-') ||
-      (/^(?:при|сопри|непри)?к$/.test(p) &&
-        /^с(ать|ат|ательн|аем|ну|нов|нут|нувши|нулся)/.test(s) &&
-        !expl.includes('косой') &&
-        !expl.includes('косит') &&
-        !expl.includes('косые') &&
-        !expl.includes('коса'));
+      hasKasKosRoot &&
+      (expl.includes('кас/кос') ||
+        expl.includes('кос/кас') ||
+        expl.includes('-кас-') ||
+        expl.includes('-кос-') ||
+        (/^(?:при|сопри|непри)?к$/.test(p) &&
+          /^с(ать|ат|ательн|аем|ну|нов|нут|нувши|нулся)/.test(s))) &&
+      !expl.includes('косой') &&
+      !expl.includes('косит') &&
+      !expl.includes('косые') &&
+      !expl.includes('коса');
     if (isKasKos) {
       return {
         topic: 'Чередование корней -КАС-/-КОС-',
@@ -93,13 +99,15 @@ export function classifyWordSubtopicAndException(
     }
 
     // 4. -ЛАГ-/-ЛОЖ-
+    const hasLagLozhRoot = /(?:лаг|лож|полог)/.test(w);
     const isLagLozh =
-      expl.includes('лаг/лож') ||
-      expl.includes('лож/лаг') ||
-      expl.includes('-лаг-') ||
-      expl.includes('-лож-') ||
-      (/^(?:пред|распо|по|при|из|воз|с|от|на|пере|у|до|об|про|низ|безот|неот)?л$/.test(p) &&
-        /^(г|ж)(ать|ает|ающ|аем|аться|ил|ить|ени|енн|ивш|ат|$)/.test(s));
+      hasLagLozhRoot &&
+      (expl.includes('лаг/лож') ||
+        expl.includes('лож/лаг') ||
+        expl.includes('-лаг-') ||
+        expl.includes('-лож-') ||
+        (/^(?:пред|распо|по|при|из|воз|с|от|на|пере|у|до|об|про|низ|безот|неот)?л$/.test(p) &&
+          /^(г|ж)(ать|ает|ающ|аем|аться|ил|ить|ени|енн|ивш|ат|$)/.test(s)));
     if (isLagLozh) {
       const isExc = w === 'полог' || w.startsWith('полог') || directExplException;
       return {
@@ -110,19 +118,25 @@ export function classifyWordSubtopicAndException(
     }
 
     // 5. -РАСТ-/-РАЩ-/-РОС-
+    const hasRastRosRoot = /(?:раст|ращ|рос|рост|отрасл)/.test(w);
     const isRastRos =
-      expl.includes('раст/ращ/рос') ||
-      expl.includes('рос/раст') ||
-      expl.includes('-раст-') ||
-      expl.includes('-ращ-') ||
-      expl.includes('-рос-') ||
-      (/^(?:вы|под|воз|вз|раз|про|за|по|от|на|пере|с|у|водо|дико|ново)?р$/.test(p) &&
-        /^(ст|щ|с)(ок|очек|к|ать|и|ущ|енн|ени|ли|ль|л|ший|т|ти|тущ|товщик|тковый)/.test(s) &&
-        !/^(роскош|росси|россып|роспис|розыск|розыгр|роell|раствор|растир|растер|растя|растека|растоп|расторг|расточ|растолк|раask)/.test(w) &&
-        !expl.includes('раствор') &&
-        !expl.includes('тер/тир'));
+      hasRastRosRoot &&
+      (expl.includes('раст/ращ/рос') ||
+        expl.includes('рос/раст') ||
+        expl.includes('-раст-') ||
+        expl.includes('-ращ-') ||
+        expl.includes('-рос-') ||
+        (/^(?:вы|под|воз|вз|раз|про|за|по|от|на|пере|с|у|водо|дико|ново)?р$/.test(p) &&
+          /^(ст|щ|с)(ок|очек|к|ать|и|ущ|енн|ени|ли|ль|л|ший|т|ти|тущ|товщик|тковый)/.test(s))) &&
+      !/^(роскош|росси|россып|роспис|розыск|розыгр|роell|раствор|растир|растер|растя|растека|растоп|расторг|расточ|растолк|раask)/.test(w) &&
+      !expl.includes('раствор') &&
+      !expl.includes('тер/тир');
     if (isRastRos) {
-      const isExc = /^(росток|росточ|ростовщ|отрасл|подростк|вырост)/.test(w) || directExplException;
+      const isExc =
+        /^(?:р[ао]сток|р[ао]сточ|р[ао]стовщ|отрасл|подростк|вырост)/.test(w) ||
+        s.startsWith('сток') ||
+        s.startsWith('стовщик') ||
+        directExplException;
       return {
         topic: isExc
           ? 'Исключение: корень -РАСТ-/-РАЩ-/-РОС-'
@@ -133,12 +147,14 @@ export function classifyWordSubtopicAndException(
     }
 
     // 6. -СКАК-/-СКОЧ-
+    const hasSkakSkochRoot = /(?:скак|скоч|скач)/.test(w);
     const isSkakSkoch =
-      expl.includes('скак/скоч') ||
-      expl.includes('скоч/скак') ||
-      expl.includes('-скак-') ||
-      expl.includes('-скоч-') ||
-      (/^(?:в|вы|за|на|об|от|пере|по|под|при|про|со|у)?ск$/.test(p) && /^(к|ч)/.test(s));
+      hasSkakSkochRoot &&
+      (expl.includes('скак/скоч') ||
+        expl.includes('скоч/скак') ||
+        expl.includes('-скак-') ||
+        expl.includes('-скоч-') ||
+        (/^(?:в|вы|за|на|об|от|пере|по|под|при|про|со|у)?ск$/.test(p) && /^(к|ч)/.test(s)));
     if (isSkakSkoch) {
       const isExc = /^(скачок|скачк|скачу|скачи|проскачу)/.test(w) || directExplException;
       return {
@@ -149,13 +165,15 @@ export function classifyWordSubtopicAndException(
     }
 
     // 7. -МАК-/-МОК-
+    const hasMakMokRoot = /(?:мак|мок)/.test(w);
     const isMakMok =
-      expl.includes('мак/мок') ||
-      expl.includes('мок/мак') ||
-      expl.includes('-мак-') ||
-      expl.includes('-мок-') ||
-      (/^(?:об|про|вы|на|непро|в|за|от|пере|по|под|раз)?м$/.test(p) &&
-        /^к(ать|нуть|ающ|аем|нув|оkn|нуть|ся|ش|чи)/.test(s));
+      hasMakMokRoot &&
+      (expl.includes('мак/мок') ||
+        expl.includes('мок/мак') ||
+        expl.includes('-мак-') ||
+        expl.includes('-мок-') ||
+        (/^(?:об|про|вы|на|непро|в|за|от|пере|по|под|раз)?м$/.test(p) &&
+          /^к(ать|нуть|ающ|аем|нув|оkn|нуть|ся|ش|чи)/.test(s)));
     if (isMakMok) {
       return {
         topic: 'Чередование корней -МАК-/-МОК-',
@@ -165,13 +183,15 @@ export function classifyWordSubtopicAndException(
     }
 
     // 8. -РАВН-/-РОВН-
+    const hasRavnRovnRoot = /(?:равн|ровн|уровен|уровн|ровесн|поровн)/.test(w);
     const isRavnRovn =
-      expl.includes('равн/ровн') ||
-      expl.includes('ровн/равн') ||
-      expl.includes('-равн-') ||
-      expl.includes('-ровн-') ||
-      (/^(?:с|у|вы|под|раз|по|при|не|равно)?р$/.test(p) && /^вн/.test(s)) ||
-      /^(ровесн|уровен|уровн|равнин)/.test(w);
+      hasRavnRovnRoot &&
+      (expl.includes('равн/ровн') ||
+        expl.includes('ровн/равн') ||
+        expl.includes('-равн-') ||
+        expl.includes('-ровн-') ||
+        (/^(?:с|у|вы|под|раз|по|при|не|равно)?р$/.test(p) && /^вн/.test(s)) ||
+        /^(ровесн|уровен|уровн|равнин)/.test(w));
     if (isRavnRovn) {
       const isExc = /^(равнин|ровесн|уровен|уровн|поровн)/.test(w) || directExplException;
       return {
@@ -182,16 +202,18 @@ export function classifyWordSubtopicAndException(
     }
 
     // 9. -ТВАР-/-ТВОР-
+    const hasTvarTvorRoot = /(?:твар|твор|утвар)/.test(w);
     const isTvarTvor =
-      expl.includes('твар/твор') ||
-      expl.includes('твор/твар') ||
-      expl.includes('-твар-') ||
-      expl.includes('-твор-') ||
-      (/^(?:у|со|при|за|вы|на|о|об|от|пере|по|под|пре|раз|рас|благо|миро|живо|чудо|руко|стихо)?тв$/.test(p) &&
-        /^р(ь|и|ить|ец|ени|честв|ил|им|ящ|$)/.test(s) &&
-        !expl.includes('отвар') &&
-        !expl.includes('варка') &&
-        !expl.includes('варит'));
+      hasTvarTvorRoot &&
+      (expl.includes('твар/твор') ||
+        expl.includes('твор/твар') ||
+        expl.includes('-твар-') ||
+        expl.includes('-твор-') ||
+        (/^(?:у|со|при|за|вы|на|о|об|от|пере|по|под|пре|раз|рас|благо|миро|живо|чудо|руко|стихо)?тв$/.test(p) &&
+          /^р(ь|и|ить|ец|ени|честв|ил|им|ящ|$)/.test(s))) &&
+      !expl.includes('отвар') &&
+      !expl.includes('варка') &&
+      !expl.includes('варит');
     if (isTvarTvor) {
       const isExc = /^утвар/.test(w) || directExplException;
       return {
@@ -202,12 +224,14 @@ export function classifyWordSubtopicAndException(
     }
 
     // 10. -КЛАН-/-КЛОН-
+    const hasKlanKlonRoot = /(?:клан|клон)/.test(w);
     const isKlanKlon =
-      expl.includes('клан/клон') ||
-      expl.includes('клон/клан') ||
-      expl.includes('-клан-') ||
-      expl.includes('-клон-') ||
-      (/^(?:по|на|пре|с|от|у|при|про|непре|коленопре)?кл$/.test(p) && /^н(ить|иться|яться|ени|ен|он|ян)/.test(s));
+      hasKlanKlonRoot &&
+      (expl.includes('клан/клон') ||
+        expl.includes('клон/клан') ||
+        expl.includes('-клан-') ||
+        expl.includes('-клон-') ||
+        (/^(?:по|на|пре|с|от|у|при|про|непре|коленопре)?кл$/.test(p) && /^н(ить|иться|яться|ени|ен|он|ян)/.test(s)));
     if (isKlanKlon) {
       return {
         topic: 'Чередование корней -КЛАН-/-КЛОН-',
@@ -217,12 +241,14 @@ export function classifyWordSubtopicAndException(
     }
 
     // 11. -ПЛАВ-/-ПЛОВ-
+    const hasPlavPlovRoot = /(?:плав|плов|плыв)/.test(w);
     const isPlavPlov =
-      expl.includes('плав/плов') ||
-      expl.includes('плов/плав') ||
-      expl.includes('-плав-') ||
-      expl.includes('-плов-') ||
-      (/^(?:по|вы|в|за|на|от|пере|под|при|про|рас|с|у|жук-)?пл$/.test(p) && /^в(ец|чих|ок|уч|ать|ник|ни|у|ун)/.test(s));
+      hasPlavPlovRoot &&
+      (expl.includes('плав/плов') ||
+        expl.includes('плов/плав') ||
+        expl.includes('-плав-') ||
+        expl.includes('-плов-') ||
+        (/^(?:по|вы|в|за|на|от|пере|под|при|про|рас|с|у|жук-)?пл$/.test(p) && /^в(ец|чих|ок|уч|ать|ник|ни|у|ун)/.test(s)));
     if (isPlavPlov) {
       const isExc = /^(пловец|пловц|пловчих|плывун)/.test(w) || directExplException;
       return {

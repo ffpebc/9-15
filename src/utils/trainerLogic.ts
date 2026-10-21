@@ -2268,21 +2268,35 @@ export function getTrainerBank() {
       if (seenSprintKeys.has(stemKey)) continue;
       seenSprintKeys.add(stemKey);
 
+      const classified = classifyWordSubtopicAndException(
+        rawSq.task,
+        rawSq.prefix,
+        rawSq.suffix,
+        rawSq.answer,
+        rawSq.explanation || rawSq.rule,
+        rawSq.context,
+        Boolean(rawSq.isTrap)
+      );
+
       const smartBaseOpts = getSmartChoiceOptions(
         rawSq.task,
         rawSq.answer,
         rawSq.prefix,
         rawSq.suffix
       );
+      const isTrap = Boolean(rawSq.isTrap || classified.isTrap);
       const sq: SprintQuestion = {
         ...rawSq,
+        topic: classified.topic,
+        rule: classified.rule || rawSq.rule,
+        isTrap,
         options: orderOptionsDeterministically(smartBaseOpts, rawSq.answer, sprintQuestions.length),
       };
       sprintQuestions.push(sq);
       byId.set(sq.id, sq);
 
       const trapStem = `${sq.task}:${sq.prefix.toLowerCase().trim()}..${sq.suffix.toLowerCase().trim()}`;
-      if (sq.isTrap && trapQuestions.length < 120 && !seenTrapStems.has(trapStem)) {
+      if (isTrap && trapQuestions.length < 120 && !seenTrapStems.has(trapStem)) {
         seenTrapStems.add(trapStem);
         trapQuestions.push(sq);
       }

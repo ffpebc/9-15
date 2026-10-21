@@ -1,66 +1,47 @@
-import type { FipiQuestion, SprintQuestion, TaskId } from '../utils/trainerLogic.ts';
-import allWordsBank from './allWordsBank9_15.json';
-import fipiTasksBank from './fipiTasksBank9_15.json';
-import sprintBank from './sprintBank9_15.json';
+import type { TaskId, FipiQuestion, SprintQuestion } from '../utils/trainerLogic.ts';
+import allWordsData from './allWordsBank9_15.json' with { type: 'json' };
+import fipiTasks from './fipiTasksBank9_15.json' with { type: 'json' };
+import sprintTasks from './sprintBank9_15.json' with { type: 'json' };
 
-export interface BankWordItem {
+export interface WordEntry {
   id: string;
-  task: TaskId;
   word: string;
-  wordGap?: string;
-  prefix?: string;
-  missingLetter?: string;
-  suffix?: string;
-  topic?: string;
-  category?: string;
-  rule?: string;
-  context?: string;
-  source?: string;
+  wordGap: string;
+  prefix: string;
+  missingLetter: string;
+  suffix: string;
+  task: TaskId;
+  topic: string;
+  category: string;
+  rule: string;
+  context: string;
+  source: string;
   isTrap?: boolean;
 }
 
-export const BANK_METADATA = {
-  generatedAt: '2026-10-21T00:00:00.000Z',
-  schoolYear: '2026-2027',
-  version: '3.0.0-fipi-tasks-9-15',
-  sources: [
-    'ФИПИ (Официальные Демоверсии и Открытый банк 2025–2027)',
-    'Школково (Дощинский-2026, Банк ФИПИ, Авторские)',
-  ],
-  taskCounts: {
-    '9': 68,
-    '10': 70,
-    '11': 69,
-    '12': 67,
-    '13': 54,
-    '14': 35,
-    '15': 35,
-  },
-  totalTasks: (fipiTasksBank as FipiQuestion[]).length,
-  totalSprintQuestions: (sprintBank as SprintQuestion[]).length,
-  totalWords: (allWordsBank as BankWordItem[]).length,
-} as const;
+// Извлекаем массив слов (18 070 слов)
+const rawWords = Array.isArray(allWordsData) ? allWordsData : (allWordsData as any).words || [];
 
-export const PARSED_FIPI_QUESTIONS: FipiQuestion[] = fipiTasksBank as unknown as FipiQuestion[];
-export const PARSED_SPRINT_QUESTIONS: SprintQuestion[] = sprintBank as unknown as SprintQuestion[];
-export const PARSED_WORDS_DATABASE: BankWordItem[] = allWordsBank as unknown as BankWordItem[];
+export const PARSED_WORDS: WordEntry[] = rawWords as WordEntry[];
+export const PARSED_FIPI_QUESTIONS: FipiQuestion[] = (fipiTasks as any) as FipiQuestion[];
+export const PARSED_SPRINT_QUESTIONS: SprintQuestion[] = (sprintTasks as any) as SprintQuestion[];
 
 export const PARSED_TASKS_MAP: Record<TaskId, FipiQuestion[]> = {
-  '9': [],
-  '10': [],
-  '11': [],
-  '12': [],
-  '13': [],
-  '14': [],
-  '15': [],
+  '9': PARSED_FIPI_QUESTIONS.filter((q) => q.task === '9'),
+  '10': PARSED_FIPI_QUESTIONS.filter((q) => q.task === '10'),
+  '11': PARSED_FIPI_QUESTIONS.filter((q) => q.task === '11'),
+  '12': PARSED_FIPI_QUESTIONS.filter((q) => q.task === '12'),
+  '13': PARSED_FIPI_QUESTIONS.filter((q) => q.task === '13'),
+  '14': PARSED_FIPI_QUESTIONS.filter((q) => q.task === '14'),
+  '15': PARSED_FIPI_QUESTIONS.filter((q) => q.task === '15'),
 };
 
-for (const q of PARSED_FIPI_QUESTIONS) {
-  if (PARSED_TASKS_MAP[q.task]) {
-    PARSED_TASKS_MAP[q.task].push(q);
-  }
-}
-
-export function getParsedWordsDatabase(): BankWordItem[] {
-  return PARSED_WORDS_DATABASE;
-}
+export const PARSED_WORDS_DATABASE: Record<TaskId, WordEntry[]> = {
+  '9': PARSED_WORDS.filter((w) => w.task === '9'),
+  '10': PARSED_WORDS.filter((w) => w.task === '10'),
+  '11': PARSED_WORDS.filter((w) => w.task === '11'),
+  '12': PARSED_WORDS.filter((w) => w.task === '12'),
+  '13': PARSED_WORDS.filter((w) => w.task === '13'),
+  '14': PARSED_WORDS.filter((w) => w.task === '14'),
+  '15': PARSED_WORDS.filter((w) => w.task === '15'),
+};

@@ -1,0 +1,17 @@
+node_modules
+node_modules/
+dist/
+dist
+.cache
+.cache/
+.data
+.data/
+.aistudio
+.aistudio/
+*.log
+.DS_Store
+.env*
+!.env.example
+push.sh
+__pycache__/
+*.pyc
