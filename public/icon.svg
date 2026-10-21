@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#007AFF" />
+      <stop offset="52%" stop-color="#5856D6" />
+      <stop offset="100%" stop-color="#AF52DE" />
+    </linearGradient>
+    <linearGradient id="glass" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.06" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)" />
+  <rect x="28" y="28" width="456" height="220" rx="92" fill="url(#glass)" />
+  <text x="256" y="236" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-weight="900" font-size="118" letter-spacing="-3">ЕГЭ</text>
+  <rect x="96" y="284" width="320" height="114" rx="57" fill="#FFFFFF" fill-opacity="0.22" />
+  <text x="256" y="362" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-weight="800" font-size="68" letter-spacing="-1">9–13</text>
+</svg>

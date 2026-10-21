@@ -1,0 +1,32 @@
+{
+  "name": "ЕГЭ Русский 9–13 — iOS 27 Тренажёр",
+  "short_name": "ЕГЭ 9–13",
+  "description": "Интерактивный тренажёр орфографии ЕГЭ по русскому языку (задания 9–13, база ФИПИ 2026–2027) с мгновенным запуском офлайн.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E6ECF8",
+  "theme_color": "#E6ECF8",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

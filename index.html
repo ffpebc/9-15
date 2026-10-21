@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" id="app-theme-color" content="#E6ECF8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ЕГЭ 9–13" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <title>ЕГЭ Русский 9–13 — iOS 27 Тренажёр</title>
+    <meta name="description" content="Интерактивный тренажёр орфографии ЕГЭ по русскому языку (задания 9–13, база 5250+ заданий ФИПИ) с конспектом, банком ошибок и мультиуровневым сохранением прогресса для Google Sites и iOS." />
+    <meta property="og:title" content="ЕГЭ Русский 9–13 — iOS 27 Тренажёр" />
+    <meta property="og:description" content="Интерактивный тренажёр орфографии ЕГЭ по русскому языку (задания 9–13, база 5250+ заданий ФИПИ) с конспектом, банком ошибок и мультиуровневым сохранением прогресса для Google Sites и iOS." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100dvh;
+        overflow: hidden;
+        background-color: #E6ECF8;
+        color: #0B0F19;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      html.dark, html.dark body {
+        background-color: #000000;
+        color: #FFFFFF;
+      }
+    </style>
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('ege_ortho_ios27_v6');
+          if (raw && (raw.indexOf('"darkMode":true') !== -1 || raw.indexOf('"d":1') !== -1)) {
+            document.documentElement.classList.add('dark');
+            var meta = document.getElementById('app-theme-color');
+            if (meta) meta.setAttribute('content', '#000000');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
