@@ -1428,6 +1428,13 @@ export const DictionaryModal: React.FC<DictionaryModalProps> = React.memo(({
     return () => window.removeEventListener('ege-bank-loaded', onLoaded);
   }, []);
 
+  useEffect(() => {
+    if (isOpen) {
+      cachedFullDatabaseEntries = null;
+      setBankRev((r) => r + 1);
+    }
+  }, [isOpen]);
+
   const hasOpened = hasOpenedRef.current;
   const fullEntries = useMemo(
     () => (hasOpened ? getFullDatabaseEntries() : FIPI_DICTIONARY),

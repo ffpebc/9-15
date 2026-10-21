@@ -77,18 +77,28 @@ export function refreshMaps() {
   }
 }
 
-// Первоначальное заполнение карт
-refreshMaps();
+// Очищаем устаревший кэш с урезанной базой
+if (typeof window !== 'undefined' && 'caches' in window) {
+  try {
+    window.caches.delete('ege-bank-cache-v1');
+    window.caches.delete('ege-bank-cache-v2');
+    window.caches.delete('ege-bank-cache-v3');
+  } catch {}
+}
 
 async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<any> {
-  const cacheName = 'ege-bank-cache-v1';
+  const cacheName = 'ege-bank-cache-v4';
   let cache: Cache | null = null;
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {
       cache = await window.caches.open(cacheName);
       const cached = await cache.match(url);
       if (cached) {
-        return await cached.json();
+        const cachedData = await cached.json();
+        const count = Array.isArray(cachedData) ? cachedData.length : cachedData?.words?.length || 0;
+        if (count >= 15000 || (url.includes('fipiTasks') && count >= 2000) || (url.includes('sprint') && count >= 10000)) {
+          return cachedData;
+        }
       }
     } catch {}
   }
@@ -101,6 +111,11 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
       const data = await localRes.json();
       const count = Array.isArray(data) ? data.length : data?.words?.length || 0;
       if (count >= 15000 || (url.includes('fipiTasks') && count >= 2000) || (url.includes('sprint') && count >= 10000)) {
+        if (cache) {
+          try {
+            await cache.put(url, new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } }));
+          } catch {}
+        }
         return data;
       }
     }
