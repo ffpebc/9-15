@@ -24,21 +24,33 @@ let initialSprint: SprintQuestion[] = (starterBank.sprint || []) as SprintQuesti
 // В среде Node.js (при прогоне тестов) считываем полную базу из локальных файлов
 if (typeof window === 'undefined' && typeof process !== 'undefined') {
   try {
-    const fs = await import('node:fs');
-    const path = await import('node:path');
-    const dataDir = path.resolve(process.cwd(), 'src/data');
-    const allWordsPath = path.join(dataDir, 'allWordsBank9_15.json');
-    if (fs.existsSync(allWordsPath)) {
-      const parsed = JSON.parse(fs.readFileSync(allWordsPath, 'utf8'));
-      initialWords = Array.isArray(parsed) ? parsed : parsed.words || [];
-    }
-    const fipiPath = path.join(dataDir, 'fipiTasksBank9_15.json');
-    if (fs.existsSync(fipiPath)) {
-      initialFipi = JSON.parse(fs.readFileSync(fipiPath, 'utf8'));
-    }
-    const sprintPath = path.join(dataDir, 'sprintBank9_15.json');
-    if (fs.existsSync(sprintPath)) {
-      initialSprint = JSON.parse(fs.readFileSync(sprintPath, 'utf8'));
+    const getModule = (name: string): any => {
+      if (typeof (process as any).getBuiltinModule === 'function') {
+        return (process as any).getBuiltinModule(name);
+      }
+      if (typeof require !== 'undefined') {
+        return require(name);
+      }
+      return null;
+    };
+
+    const fs = getModule('node:fs');
+    const path = getModule('node:path');
+    if (fs && path) {
+      const dataDir = path.resolve(process.cwd(), 'src/data');
+      const allWordsPath = path.join(dataDir, 'allWordsBank9_15.json');
+      if (fs.existsSync(allWordsPath)) {
+        const parsed = JSON.parse(fs.readFileSync(allWordsPath, 'utf8'));
+        initialWords = Array.isArray(parsed) ? parsed : parsed.words || [];
+      }
+      const fipiPath = path.join(dataDir, 'fipiTasksBank9_15.json');
+      if (fs.existsSync(fipiPath)) {
+        initialFipi = JSON.parse(fs.readFileSync(fipiPath, 'utf8'));
+      }
+      const sprintPath = path.join(dataDir, 'sprintBank9_15.json');
+      if (fs.existsSync(sprintPath)) {
+        initialSprint = JSON.parse(fs.readFileSync(sprintPath, 'utf8'));
+      }
     }
   } catch (err) {
     // fallback на starterBank
@@ -77,17 +89,18 @@ export function refreshMaps() {
   }
 }
 
-// Очищаем устаревший кэш с урезанной базой
+// Очищаем устаревший кэш с урезанной или поврежденной базой
 if (typeof window !== 'undefined' && 'caches' in window) {
   try {
     window.caches.delete('ege-bank-cache-v1');
     window.caches.delete('ege-bank-cache-v2');
     window.caches.delete('ege-bank-cache-v3');
+    window.caches.delete('ege-bank-cache-v4');
   } catch {}
 }
 
 async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<any> {
-  const cacheName = 'ege-bank-cache-v4';
+  const cacheName = 'ege-bank-cache-v5';
   let cache: Cache | null = null;
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {
@@ -103,25 +116,7 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
     } catch {}
   }
 
-  // 1. Попытка загрузить из локального сервера (только если файл полный, не урезанный)
-  const filename = url.split('/').pop();
-  try {
-    const localRes = await fetch(`/src/data/${filename}`);
-    if (localRes.ok) {
-      const data = await localRes.json();
-      const count = Array.isArray(data) ? data.length : data?.words?.length || 0;
-      if (count >= 15000 || (url.includes('fipiTasks') && count >= 2000) || (url.includes('sprint') && count >= 10000)) {
-        if (cache) {
-          try {
-            await cache.put(url, new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } }));
-          } catch {}
-        }
-        return data;
-      }
-    }
-  } catch {}
-
-  // 2. Основной CDN (jsDelivr с глобальным edge-кэшированием)
+  // 1. Быстрый CDN jsDelivr с глобальным edge-кэшированием
   try {
     const res = await fetch(url);
     if (res.ok) {
@@ -134,10 +129,10 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
       return data;
     }
   } catch (err) {
-    console.warn(`[EGE Bank] Failed to fetch from CDN ${url}:`, err);
+    console.warn(`[EGE Bank] CDN fetch error, falling back:`, err);
   }
 
-  // 3. Fallback на GitHub Raw
+  // 2. Fallback на GitHub Raw
   if (fallbackUrl) {
     try {
       const res = await fetch(fallbackUrl);
@@ -151,7 +146,7 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
         return data;
       }
     } catch (err) {
-      console.warn(`[EGE Bank] Failed to fetch from fallback ${fallbackUrl}:`, err);
+      console.warn(`[EGE Bank] Fallback fetch error:`, err);
     }
   }
 
@@ -169,10 +164,11 @@ export async function loadFullDataBank(): Promise<boolean> {
     const cdnBase = 'https://cdn.jsdelivr.net/gh/ffpebc/9-15@main/src/data';
     const rawBase = 'https://raw.githubusercontent.com/ffpebc/9-15/main/src/data';
 
+    const vParam = '?v=5';
     const [allWordsData, fipiData, sprintData] = await Promise.all([
-      fetchJsonWithCache(`${cdnBase}/allWordsBank9_15.json`, `${rawBase}/allWordsBank9_15.json`),
-      fetchJsonWithCache(`${cdnBase}/fipiTasksBank9_15.json`, `${rawBase}/fipiTasksBank9_15.json`),
-      fetchJsonWithCache(`${cdnBase}/sprintBank9_15.json`, `${rawBase}/sprintBank9_15.json`),
+      fetchJsonWithCache(`${cdnBase}/allWordsBank9_15.json${vParam}`, `${rawBase}/allWordsBank9_15.json${vParam}`),
+      fetchJsonWithCache(`${cdnBase}/fipiTasksBank9_15.json${vParam}`, `${rawBase}/fipiTasksBank9_15.json${vParam}`),
+      fetchJsonWithCache(`${cdnBase}/sprintBank9_15.json${vParam}`, `${rawBase}/sprintBank9_15.json${vParam}`),
     ]);
 
     let updated = false;
@@ -223,15 +219,7 @@ export async function loadFullDataBank(): Promise<boolean> {
   }
 }
 
-// Автоматический запуск предзагрузки в фоновом режиме браузера
+// Запуск моментальной фоновой подгрузки без ожидания
 if (typeof window !== 'undefined') {
-  if (typeof requestIdleCallback !== 'undefined') {
-    requestIdleCallback(() => {
-      loadFullDataBank();
-    });
-  } else {
-    setTimeout(() => {
-      loadFullDataBank();
-    }, 200);
-  }
+  loadFullDataBank();
 }

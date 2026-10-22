@@ -416,7 +416,14 @@ export function normalizeRawQuestionToTrainer(raw: RawParsedQuestion): {
 
           if (!wordLetter) {
             const solvedText = safeSolved[wIdx] || '';
-            wordLetter = solvedText.replace(/[^А-ЯЁ]/g, '')[0] || 'А';
+            const capMatch = solvedText.replace(/[^А-ЯЁ]/g, '')[0];
+            if (capMatch) {
+              wordLetter = capMatch;
+            } else if (r.letter && r.letter !== '✓') {
+              wordLetter = r.letter.toUpperCase();
+            } else {
+              wordLetter = '';
+            }
           }
 
           const isKOnly =

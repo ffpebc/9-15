@@ -2113,6 +2113,16 @@ export function getSmartChoiceOptions(
     return ['СЛИТНО', 'РАЗДЕЛЬНО'];
   }
 
+  if (task === '9') {
+    if (origUpper === 'Е' || origUpper === 'И') return ['Е', 'И'];
+    if (origUpper === 'О' || origUpper === 'А') return ['О', 'А'];
+    if (origUpper === 'Ы') return ['Ы', 'И'];
+    if (origUpper === 'Э') return ['Э', 'Е'];
+    if (origUpper === 'Ю' || origUpper === 'У') return ['Ю', 'У'];
+    if (origUpper === 'Я') return ['Я', 'Е'];
+    return ['О', 'А'];
+  }
+
   if (task === '10') {
     if (origUpper === 'Ъ' || origUpper === 'Ь') return ['Ъ', 'Ь'];
     if (origUpper === 'Ы') return ['Ы', 'И'];
