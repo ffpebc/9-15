@@ -669,7 +669,14 @@ export function classifyWordSubtopicAndException(
         rule: 'При склонении в суффиксе -ИК- гласная сохраняется (ключик — ключика), а в суффиксе -ЕК- выпадает (замочек — замочка).',
       };
     }
-    if (expl.includes('-чик-') || expl.includes('-щик-')) {
+    if (
+      expl.includes('-чик-') ||
+      expl.includes('-щик-') ||
+      ((ans === 'Ч' || ans === 'Щ') && /^ик/.test(s)) ||
+      expl.includes('буква ч') ||
+      expl.includes('буква щ') ||
+      expl.includes('роду занятий')
+    ) {
       return {
         topic: 'Суффиксы существительных -ЧИК- и -ЩИК-',
         isTrap: false,

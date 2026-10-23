@@ -550,7 +550,7 @@ export function cleanDisplayText(text: string): string {
        .replace(/&(?:laquo|raquo);/g, '«')
        .replace(/&[a-zA-Z0-9#]+;/g, '');
   s = s.replace(/<[^>]+>/g, '');
-  s = s.replace(/\s*\d+[a-zA-Z]:[a-zA-Z0-9]+.*$/s, '');
+  s = s.replace(/[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+.*$/s, '');
   s = s.replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '');
   s = s.replace(/^[1-5]\s*[\)\.\-–]\s*/gm, '');
   s = s.replace(/\bпров\.?\s*гл\.?\s*[:—\-–]?/g, 'проверочное слово: ')

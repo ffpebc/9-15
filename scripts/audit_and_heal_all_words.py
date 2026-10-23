@@ -103,8 +103,8 @@ def clean_row_explanation(s):
     if not s: return ''
     s = str(s).replace('\\n', '\n').replace('\\r', '').replace('\\«', '«').replace('\\»', '»').replace('\\"', '"')
     s = html.unescape(s)
-    # Strip trailing scraped blocks like 4a:T729, 3d:Tb43...
-    s = re.sub(r'\s*\d+[a-zA-Z]:[a-zA-Z0-9]+.*', '', s, flags=re.DOTALL)
+    # Strip trailing scraped blocks like 4a:T729, 49:Tcd6...
+    s = re.sub(r'[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+.*', '', s, flags=re.DOTALL)
     # Strip HTML tags
     s = re.sub(r'(?:\\u003c|<)[^>]+(?:\\u003e|>)', '', s)
     # Strip HTML entities
@@ -130,6 +130,7 @@ def clean_row_explanation(s):
 def polish_word_segment(seg, word_hint=''):
     if not seg: return ''
     seg = str(seg).strip().replace('\\n', '\n').replace('\\r', '').replace('\\«', '«').replace('\\»', '»').replace('\\"', '"')
+    seg = re.sub(r'[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+.*', '', seg, flags=re.DOTALL)
 
     # If segment has multiple lines, pick the line matching the word
     if '\n' in seg:
