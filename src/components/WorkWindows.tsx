@@ -13,6 +13,7 @@ import {
 } from '../utils/trainerLogic';
 import { SwipeableSheet, LiquidGlassSegmented } from './LiquidGlassControls';
 import { PARSED_WORDS_DATABASE, PARSED_SPRINT_QUESTIONS } from '../data/tasksBankData.ts';
+import { classifyWordSubtopicAndException } from '../utils/wordClassifier.ts';
 
 /* ============================================================================
    1. ОКНО «ШАБЛОНЫ И УМНЫЙ ПОДБОР ЗАНЯТИЯ» (PresetsModal)
@@ -540,6 +541,34 @@ const TASK_KEY_EXCEPTIONS: Record<TaskId, string[]> = {
   '15': ['стеклянный', 'оловянный', 'деревянный', 'ветреный', 'кованый', 'раненый', 'жареный'],
 };
 
+export function cleanDisplayText(text: string): string {
+  if (!text) return '';
+  let s = String(text);
+  s = s.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\\«/g, '«').replace(/\\»/g, '»').replace(/\\"/g, '"');
+  s = s.replace(/&(?:ldquo|rdquo|quot);/g, '"')
+       .replace(/&(?:rarr|rightarrow);/g, '→')
+       .replace(/&(?:laquo|raquo);/g, '«')
+       .replace(/&[a-zA-Z0-9#]+;/g, '');
+  s = s.replace(/<[^>]+>/g, '');
+  s = s.replace(/\s*\d+[a-zA-Z]:[a-zA-Z0-9]+.*$/s, '');
+  s = s.replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '');
+  s = s.replace(/^[1-5]\s*[\)\.\-–]\s*/gm, '');
+  s = s.replace(/\bпров\.?\s*гл\.?\s*[:—\-–]?/g, 'проверочное слово: ')
+       .replace(/\bнепровер(?:яемая)?\.?\s*гл(?:асная)?\.?(?:\s*\(словарное слово\))*/g, 'непроверяемая гласная (словарное слово)')
+       .replace(/\(словарное слово\)(?:\s*\(словарное слово\))+/g, '(словарное слово)')
+       .replace(/\bЧГ\b/g, 'чередование корней')
+       .replace(/\bПГ,\s*([А-Яа-яЁё]+)/g, 'проверочное слово: «$1»')
+       .replace(/\bПГ\b/g, 'проверяемая безударная гласная')
+       .replace(/\bНГ\b/g, 'непроверяемая гласная (словарное слово)')
+       .replace(/\bискл\.(?!\w)/g, 'исключение')
+       .replace(/["“]([^"”]+)["”]/g, '«$1»');
+  s = s.replace(/^([А-Яа-яЁё]+)[»"]\s*([—–-])/g, '«$1» $2');
+  s = s.replace(/[,;]\s*\([^\)]+\)\s*$/g, '')
+       .replace(/[,;]\s*\([^\)]*$/g, '')
+       .replace(/[,;.\s]+$/g, '');
+  return s.trim();
+}
+
 function splitFormulaSteps(rawExplanation: string): { head: string; tail: string } {
   const arrowMatch = rawExplanation.split(/\s*(?:→|←|—|=)\s*/);
   if (arrowMatch.length >= 2) {
@@ -580,9 +609,11 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
   staggerIndex = 0,
   forceCollapsed,
 }) => {
-  const isFipi5Row = question?.kind === 'fipi' || explanation.includes('Строка ') || explanation.includes(';');
-  const formula = splitFormulaSteps(explanation);
-  const shortRule = rule ? rule.split('.')[0] + '.' : TASK_META[task].subtitle;
+  const cleanExpl = cleanDisplayText(explanation);
+  const cleanRuleText = cleanDisplayText(rule || '');
+  const isFipi5Row = question?.kind === 'fipi' || cleanExpl.includes('Строка ') || cleanExpl.includes(';');
+  const formula = splitFormulaSteps(cleanExpl);
+  const shortRule = cleanRuleText ? cleanRuleText.split('.')[0] + '.' : TASK_META[task].subtitle;
   
   // Synchronous override state - guarantees zero frame lag when forceCollapsed changes
   const [userOverride, setUserOverride] = useState<boolean | null>(null);
@@ -760,7 +791,7 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
                 </div>
               ) : isFipi5Row ? (
                 <div className="flex flex-col gap-1">
-                  {explanation
+                  {cleanExpl
                     .split(/\s*(?:\||;)\s*/)
                     .filter(Boolean)
                     .map((part, pIdx) => (
@@ -873,11 +904,12 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
   const comparison = TASK_RULE_COMPARISON[task];
   const exceptionChips = TASK_KEY_EXCEPTIONS[task] || [];
 
-  const rawExplanation =
+  const rawExplanation = cleanDisplayText(
     activeError?.explanation ||
     (activeQuestion?.kind === 'sprint' ? activeQuestion.explanation : '') ||
-    '';
-  const ruleText = activeError?.rule || activeQuestion?.rule || '';
+    ''
+  );
+  const ruleText = cleanDisplayText(activeError?.rule || activeQuestion?.rule || '');
   const userChoice = activeError?.userChoice;
   const correctChoice =
     activeError?.correctChoice ||
@@ -905,6 +937,33 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
     activeError?.context ||
     (activeQuestion?.kind === 'sprint' ? activeQuestion.context : undefined);
 
+  const liveMeta = useMemo(() => {
+    if (activeQuestion && activeQuestion.kind === 'sprint') {
+      return classifyWordSubtopicAndException(
+        task,
+        activeQuestion.prefix,
+        activeQuestion.suffix,
+        activeQuestion.answer,
+        rawExplanation,
+        contextText
+      );
+    }
+    if (activeError && activeError.correctWord) {
+      return classifyWordSubtopicAndException(
+        task,
+        activeError.prefix || '',
+        activeError.suffix || '',
+        activeError.correctChoice || '',
+        rawExplanation,
+        contextText
+      );
+    }
+    return null;
+  }, [activeQuestion, activeError, task, rawExplanation, contextText]);
+
+  const displayTopic = liveMeta?.topic || topic;
+  const displayRule = ruleText || (liveMeta?.rule ? cleanDisplayText(liveMeta.rule) : '');
+
   return (
     <SwipeableSheet
       id="rule-inspector-modal"
@@ -931,7 +990,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
               className="block text-[11.5px] truncate whitespace-nowrap mt-0.5 font-bold"
               style={{ color: 'var(--ios-blue)' }}
             >
-              {topic}
+              {displayTopic}
             </span>
           </div>
         </div>
@@ -1022,7 +1081,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
           )}
 
           {/* Full Rule Box */}
-          {ruleText && (
+          {displayRule && (
             <div
               className="p-3 rounded-2xl flex flex-col gap-1.5 mt-2 border border-[var(--ios-separator)]/60"
               style={{ background: 'var(--ios-bg-secondary)' }}
@@ -1040,7 +1099,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
                 className="text-[13px] sm:text-[13.5px] font-semibold leading-relaxed break-words"
                 style={{ color: 'var(--ios-label)' }}
               >
-                {ruleText}
+                {displayRule}
               </div>
             </div>
           )}
@@ -1338,7 +1397,7 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
         word: fullLabel,
         highlight: item.missingLetter || (item as any).letter || '—',
         category: item.category || (item as any).topic || TASK_META[item.task]?.title || `Задание № ${item.task}`,
-        note: item.rule || (item as any).explanation || '',
+        note: cleanDisplayText(item.rule || (item as any).explanation || ''),
         source: item.source || 'ФИПИ 2026–2027',
       });
     }
@@ -1359,7 +1418,7 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
           word: fullLabel,
           highlight: sq.answer || '—',
           category: sq.topic || TASK_META[sq.task]?.title || `Задание № ${sq.task}`,
-          note: sq.rule || sq.explanation || '',
+          note: cleanDisplayText(sq.rule || sq.explanation || ''),
           source: sq.source || 'Банк ФИПИ / Школково',
         });
       }
@@ -1383,7 +1442,7 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
             word: fullLabel,
             highlight: sq.answer || '—',
             category: sq.topic || TASK_META[sq.task]?.title || `Задание № ${sq.task}`,
-            note: sq.rule || sq.explanation || '',
+            note: cleanDisplayText(sq.rule || sq.explanation || ''),
             source: sq.source || 'Банк заданий ФИПИ 2026–2027',
           });
         }

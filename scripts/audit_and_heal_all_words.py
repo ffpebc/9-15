@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Exhaustive Audit and Healing Pipeline for All 18,070 Words and 2,810 FIPI Tasks.
-Directly solves all orthographic, grammatical, topic, and option errors across Tasks 9-15.
+Exhaustive Master Database Audit and Healing Pipeline for All 18,070 Words,
+2,810 FIPI Tasks, and 14,138 Sprint Questions across Tasks 9-15.
+
+Ensures:
+1. Zero row numbers ('1)', '2)', '3)', etc.) in word explanations across all banks.
+2. Zero HTML entity artifacts (&ldquo;, &rdquo;, &quot;, &shy;, &rarr;).
+3. Word-specific isolated single-word explanations (no full-row dumps).
+4. Authentic pedagogical transformations and check words.
+5. Accurate topic and category classification without false triggers from neighboring words.
 """
 import json
 import re
@@ -11,7 +18,9 @@ import html
 
 print("=== Starting Master Database Audit and Healing Pipeline ===")
 
+# -----------------------------------------------------------------------------
 # 1. LOAD DICTIONARY
+# -----------------------------------------------------------------------------
 print("1. Loading 1.5M dictionary...")
 with open('.data/russian_dict_utf8.txt', 'r', encoding='utf-8') as f:
     dict_words = set(line.strip().lower() for line in f if line.strip())
@@ -79,14 +88,194 @@ def clean_str(s):
     if not s: return ''
     s = str(s)
     s = html.unescape(s)
-    # Map Latin lookalikes
     for lat, cyr in LATIN_TO_CYR.items():
         s = s.replace(lat, cyr)
-    # Strip soft hyphens, zero-width chars and combining accents
     s = s.replace('\xad', '')
     s = re.sub(r'[\u200b\u200c\u200d\u200e\u200f\ufeff]', '', s)
     s = re.sub(r'[\u0301\u0300\u0302\u0342\u0343\u0344\u030a\u030b\u030c\u030d\u030e\u030f\']', '', s)
     return s.strip().lower()
+
+def strip_accents(s):
+    if not s: return ''
+    return re.sub(r'[\u0301\u0300\u0302\u0342\']', '', str(s))
+
+def clean_row_explanation(s):
+    if not s: return ''
+    s = str(s).replace('\\n', '\n').replace('\\r', '').replace('\\«', '«').replace('\\»', '»').replace('\\"', '"')
+    s = html.unescape(s)
+    # Strip trailing scraped blocks like 4a:T729, 3d:Tb43...
+    s = re.sub(r'\s*\d+[a-zA-Z]:[a-zA-Z0-9]+.*', '', s, flags=re.DOTALL)
+    # Strip HTML tags
+    s = re.sub(r'(?:\\u003c|<)[^>]+(?:\\u003e|>)', '', s)
+    # Strip HTML entities
+    s = re.sub(r'&(?:ldquo|rdquo|quot);', '\"', s)
+    s = re.sub(r'&(?:rarr|rightarrow);', '→', s)
+    s = re.sub(r'&(?:laquo|raquo);', '«', s)
+    s = re.sub(r'&[a-zA-Z0-9#]+;', '', s)
+    s = re.sub(r'[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]', '', s)
+    s = re.sub(r'\n+(?:Ответ|Источник):.*', '', s, flags=re.DOTALL)
+    s = re.sub(r'^[1-5]\s*[\)\.\-–]\s*', '', s.strip())
+    # Expand shorthand grammatical abbreviations
+    s = re.sub(r'\bпров\.?\s*гл\.?\s*[:—\-–]?', 'проверочное слово: ', s)
+    s = re.sub(r'\bнепровер(?:яемая)?\.?\s*гл(?:асная)?\.?(?:\s*\(словарное слово\))*', 'непроверяемая гласная (словарное слово)', s)
+    s = re.sub(r'\(словарное слово\)(?:\s*\(словарное слово\))+', '(словарное слово)', s)
+    s = re.sub(r'\bЧГ\b', 'чередование корней', s)
+    s = re.sub(r'\bПГ,\s*([А-Яа-яЁё]+)', r'проверочное слово: «\1»', s)
+    s = re.sub(r'\bПГ\b', 'проверяемая безударная гласная', s)
+    s = re.sub(r'\bНГ\b', 'непроверяемая гласная (словарное слово)', s)
+    s = re.sub(r'\bискл\.(?!\w)', 'исключение', s)
+    s = re.sub(r'[\"“]([^\"]+)[\"”]', r'«\1»', s)
+    return s.strip()
+
+def polish_word_segment(seg, word_hint=''):
+    if not seg: return ''
+    seg = str(seg).strip().replace('\\n', '\n').replace('\\r', '').replace('\\«', '«').replace('\\»', '»').replace('\\"', '"')
+
+    # If segment has multiple lines, pick the line matching the word
+    if '\n' in seg:
+        lines = [l.strip() for l in seg.split('\n') if l.strip()]
+        best_line = None
+        if word_hint:
+            core = strip_accents(re.sub(r'\(.*?\)', '', word_hint).strip())
+            parts = re.split(r'\.\.+|_{1,}', core)
+            p = parts[0].strip().lower() if len(parts) > 0 else ''
+            s = parts[1].strip().lower() if len(parts) > 1 else ''
+            pattern = r'(?:^|[^\wА-Яа-яЁё])(' + re.escape(p) + r'[а-яёА-ЯЁ]?' + re.escape(s) + r')(?:[^\wА-Яа-яЁё]|$)'
+            for l in lines:
+                if re.search(pattern, strip_accents(l), flags=re.IGNORECASE) and (re.search(r'[-—–:]', l) or re.search(r'\([^)]+\)', l)):
+                    best_line = l
+                    break
+        seg = best_line if best_line else lines[0]
+
+    seg = re.sub(r'^[1-5]\s*[\)\.\-–]\s*', '', seg)
+    seg = re.sub(r'^\s*[-—–:]\s*', '', seg)
+    seg = seg.replace('\\', '')
+    seg = re.sub(r'\bпров\.?\s*гл\.?\s*[:—\-–]?', 'проверочное слово: ', seg)
+    seg = re.sub(r'\bнепровер(?:яемая)?\.?\s*гл(?:асная)?\.?(?:\s*\(словарное слово\))*', 'непроверяемая гласная (словарное слово)', seg)
+    seg = re.sub(r'\(словарное слово\)(?:\s*\(словарное слово\))+', '(словарное слово)', seg)
+    seg = re.sub(r'\bЧГ\b', 'чередование корней', seg)
+    seg = re.sub(r'\bПГ,\s*([А-Яа-яЁё]+)', r'проверочное слово: «\1»', seg)
+    seg = re.sub(r'\bПГ\b', 'проверяемая безударная гласная', seg)
+    seg = re.sub(r'\bНГ\b', 'непроверяемая гласная (словарное слово)', seg)
+    seg = re.sub(r'\bискл\.(?!\w)', 'исключение', seg)
+    seg = re.sub(r'[\"“]([^\"]+)[\"”]', r'«\1»', seg)
+    # Strip trailing commas followed by neighbor context e.g. ', (молодая)'
+    seg = re.sub(r'[,;]\s*\([^\)]+\)\s*$', '', seg)
+    seg = re.sub(r'[,;]\s*\([^\)]*$', '', seg)
+    seg = re.sub(r'[,;.\s]+$', '', seg)
+    seg = seg.strip().rstrip(' «»"\'\\').lstrip(' «»"\'\\')
+    return seg.strip()
+
+def slice_row_explanations(raw_words, row_expl):
+    expl = clean_row_explanation(row_expl)
+    if not expl:
+        return [None] * len(raw_words)
+
+    # 1. Line-based / item-based matching for multiline or semicolon-separated explanations
+    candidates = [line.strip() for line in re.split(r'[\n;]+', expl) if line.strip()]
+    line_assigned = {}
+    used_cand_indices = set()
+
+    for w_idx, w in enumerate(raw_words):
+        core = strip_accents(re.sub(r'\(.*?\)', '', w).strip())
+        parts = re.split(r'\.\.+|_{1,}', core)
+        p = parts[0].strip().lower() if len(parts) > 0 else ''
+        s = parts[1].strip().lower() if len(parts) > 1 else ''
+        pattern = r'(?:^|[^\wА-Яа-яЁё])(' + re.escape(p) + r'[а-яёА-ЯЁ]?' + re.escape(s) + r')(?:[^\wА-Яа-яЁё]|$)'
+        for c_idx, cand in enumerate(candidates):
+            if c_idx in used_cand_indices:
+                continue
+            if re.search(r'[-—–:]', cand) or re.search(r'\([^)]+\)', cand):
+                m = re.search(pattern, strip_accents(cand), flags=re.IGNORECASE)
+                if m and m.start(1) <= 15:
+                    line_assigned[w_idx] = polish_word_segment(cand, w)
+                    used_cand_indices.add(c_idx)
+                    break
+
+    if len(line_assigned) == len(raw_words):
+        return [line_assigned[i] for i in range(len(raw_words))]
+
+    # 2. Positional slicing fallback for single-line comma-separated lists e.g. 'слово1 (правило), слово2 (правило)'
+    positions = []
+    search_text = expl
+    header_m = re.match(r'^[^\n—–:]+\n+(.*)', expl, re.DOTALL)
+    offset = 0
+    if header_m and re.search(r'[-—–:]', header_m.group(1)):
+        search_text = header_m.group(1)
+        offset = expl.find(search_text)
+
+    for idx, w in enumerate(raw_words):
+        core = strip_accents(re.sub(r'\(.*?\)', '', w).strip())
+        parts = re.split(r'\.\.+|_{1,}', core)
+        p = parts[0].strip().lower() if len(parts) > 0 else ''
+        s = parts[1].strip().lower() if len(parts) > 1 else ''
+        pattern = r'(?:^|[^\wА-Яа-яЁё])(' + re.escape(p) + r'[а-яёА-ЯЁ]?' + re.escape(s) + r')(?:[^\wА-Яа-яЁё]|$)'
+        matches = list(re.finditer(pattern, strip_accents(search_text), flags=re.IGNORECASE))
+        if matches:
+            prev_pos = positions[-1][0] if positions else -1
+            best_m = None
+            for m in matches:
+                if (offset + m.start(1)) > prev_pos:
+                    best_m = m
+                    break
+            if not best_m: best_m = matches[0]
+            positions.append((offset + best_m.start(1), idx, best_m.group(1)))
+        else:
+            if len(p) >= 3:
+                m = re.search(r'(?:^|[^\wА-Яа-яЁё])(' + re.escape(p) + r'[а-яёА-ЯЁ]{1,10})(?:[^\wА-Яа-яЁё]|$)', strip_accents(search_text), flags=re.IGNORECASE)
+                if m:
+                    positions.append((offset + m.start(1), idx, m.group(1)))
+                else:
+                    positions.append((-1, idx, ''))
+            else:
+                positions.append((-1, idx, ''))
+
+    valid_positions = [(pos, idx, word_text) for pos, idx, word_text in positions if pos >= 0]
+    valid_positions.sort(key=lambda x: x[0])
+
+    segments = {}
+    for i, (pos, w_idx, _) in enumerate(valid_positions):
+        next_pos = valid_positions[i+1][0] if i + 1 < len(valid_positions) else len(expl)
+        seg = expl[pos:next_pos].strip()
+        seg = polish_word_segment(seg, raw_words[w_idx])
+        segments[w_idx] = seg
+
+    return [segments.get(i) for i in range(len(raw_words))]
+
+def extract_task_14_explanations(row_expl):
+    expl = clean_row_explanation(row_expl)
+    word_map = {}
+    m = list(re.finditer(r'([А-Яа-яЁё]+\([А-Яа-яЁё]+\)|\([А-Яа-яЁё]+\)[А-Яа-яЁё]+)\s*\(([^)]+)\)', expl))
+    if m:
+        for it in m:
+            w_raw = it.group(1)
+            e_raw = it.group(2).strip()
+            w_clean = re.sub(r'[\(\)\s]', '', w_raw).lower()
+            word_map[w_clean] = polish_word_segment(e_raw)
+    parts = re.split(r'[;\n]+', expl)
+    for p in parts:
+        p_clean = polish_word_segment(p)
+        wm = re.match(r'^([А-Яа-яЁё\-]+)\s*[-—]\s*(.*)', p_clean)
+        if wm:
+            w_stem = wm.group(1).replace('-', '').lower()
+            if w_stem not in word_map:
+                word_map[w_stem] = p_clean
+    return word_map
+
+def extract_task_15_explanations(raw_row_expl):
+    s = html.unescape(raw_row_expl or '')
+    s = re.sub(r'[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]', '', s)
+    s = re.sub(r'\d+b:[a-zA-Z0-9]+', '', s)
+    s = re.sub(r'\n+(?:Ответ|Источник):.*', '', s, flags=re.DOTALL)
+    num_map = {}
+    items = re.split(r'(?=\b[1-9]\s*[\)\.\-–])', s.strip())
+    for it in items:
+        it = it.strip()
+        nm = re.match(r'^([1-9])\s*[\)\.\-–]\s*(.*)', it, re.DOTALL)
+        if nm:
+            idx = int(nm.group(1))
+            num_map[idx] = polish_word_segment(nm.group(2))
+    return num_map
 
 def extract_core_and_context(raw_text):
     if not raw_text:
@@ -276,7 +465,6 @@ def get_smart_options(task, letter, prefix='', suffix=''):
     else:
         opts = ['Е', 'И'] if l in ('Е', 'И') else ['О', 'А']
 
-    # Invariant: Answer must ALWAYS be in options
     if l not in opts:
         distractor = 'И' if l != 'И' else 'Е'
         if task == '14': distractor = 'СЛИТНО' if l != 'СЛИТНО' else 'РАЗДЕЛЬНО'
@@ -285,6 +473,37 @@ def get_smart_options(task, letter, prefix='', suffix=''):
         opts = [l, distractor]
 
     return opts
+
+def synthesize_word_explanation(task, p, letter, s, ctx=''):
+    w_cap = f"{p}{letter.upper()}{s}"
+    w_full = f"{p}{letter.lower()}{s}"
+    if task == '9':
+        for pat, cor_l, top, rule_txt in ALTERNATING_RULES:
+            if re.search(pat, w_full):
+                return f"{w_full} ({rule_txt})"
+        for pat, kws, cor_l, test_w, wrong_w in HOMOPHONES:
+            if re.search(pat, p + '..' + s):
+                return f"{w_full} (проверочное слово: «{test_w}»; не путать: {wrong_w})"
+        return f"В слове «{w_cap}» пишется безударная гласная «{letter.upper()}»."
+    elif task == '10':
+        if p.endswith('пр') and s:
+            return f"В слове «{w_cap}» пишется приставка ПР{letter.upper()}-."
+        if p.endswith('ра') or p.endswith('бе') or p.endswith('и'):
+            return f"В слове «{w_cap}» пишется приставка на {letter.upper()} перед согласным."
+        if letter.upper() in ('Ъ', 'Ь'):
+            return f"В слове «{w_cap}» пишется разделительный {letter.upper()}."
+        return f"В слове «{w_cap}» пишется приставка с буквой «{letter.upper()}»."
+    elif task == '11':
+        return f"В слове «{w_cap}» пишется суффикс с буквой «{letter.upper()}»."
+    elif task == '12':
+        return f"В слове «{w_cap}» пишется буква «{letter.upper()}»."
+    elif task == '13':
+        return f"Слово «{w_full}» пишется {letter.upper()} с НЕ."
+    elif task == '14':
+        return f"Слово «{w_full}» пишется {letter.upper()}."
+    elif task == '15':
+        return f"В слове «{w_cap}» пишется {letter.upper()}."
+    return f"В слове «{w_cap}» пишется буква «{letter.upper()}»."
 
 def resolve_letter_and_rule(task, raw_prefix, raw_suffix, context='', full_task_expl='', current_letter=''):
     p = clean_str(raw_prefix)
@@ -307,7 +526,6 @@ def resolve_letter_and_rule(task, raw_prefix, raw_suffix, context='', full_task_
             found_l = m.group(2).upper()
             cand_full = p + ('' if found_l == '—' else found_l.lower()) + s
             if cand_full in dict_words or task in ['10', '11', '12']:
-                # Extract detailed teacher sentence if available
                 cap_word = m.group(1).strip()
                 sent_m = re.search(re.escape(cap_word) + r'\s*—\s*([^.\n]+(?:\.[^.\n]+)?)', full_task_expl)
                 rule_expl = sent_m.group(0).strip() if sent_m else f'В слове «{p}{found_l}{s}» пишется буква «{found_l}».'
@@ -377,7 +595,6 @@ def resolve_letter_and_rule(task, raw_prefix, raw_suffix, context='', full_task_
 def resolve_task_15_word(w_id, raw_word, prefix_raw, suffix_raw, current_letter, rule_raw, fipi_task=None):
     p = clean_str(prefix_raw)
     s = clean_str(suffix_raw)
-    # Strip any digit brackets or gaps
     p = re.sub(r'[\(\)\d\s\.]', '', p)
     s = re.sub(r'[\(\)\d\s\.]', '', s)
 
@@ -446,7 +663,6 @@ def resolve_task_15_word(w_id, raw_word, prefix_raw, suffix_raw, current_letter,
 
 def resolve_task_14_word(raw_word, rule_raw=''):
     w_clean = clean_str(raw_word)
-    # Detect ДЕФИСНО vs СЛИТНО vs РАЗДЕЛЬНО
     is_defis = False
     is_razdelno = False
 
@@ -494,7 +710,9 @@ print("2. Healing fipiTasksBank9_15.json...")
 with open('src/data/fipiTasksBank9_15.json', 'r', encoding='utf-8') as f:
     fipi = json.load(f)
 
-solved_map_by_fipi_word = {} # (fipi_id, row_idx, word_idx) -> (solved_word, letter, topic, rule, p, s, ctx)
+solved_map_by_fipi_word = {} # (fipi_id, row_idx, word_idx) -> (solved_word, letter, topic, rule, p, s, ctx, isolated_expl)
+fipi_isolated_by_stem = {}   # (task_num, p..s) -> (isolated_expl, topic, rule_text)
+fipi_isolated_by_word = {}   # (task_num, clean_word) -> (isolated_expl, topic, rule_text)
 fipi_by_id = {t.get('id'): t for t in fipi}
 
 fipi_tasks_repaired = 0
@@ -503,12 +721,10 @@ for t in fipi:
     task_num = t.get('task', '')
     rows = t.get('rows', [])
 
-    # Assemble full task explanation and clean trailing scrap tags
+    # Assemble task explanation and clean row explanations
     task_expl_parts = []
     for r in rows:
-        raw_e = r.get('explanation', '')
-        # Strip trailing 4b:T9f6 dumps
-        clean_e = re.split(r'\d+b:[a-zA-Z0-9]+', raw_e)[0].strip()
+        clean_e = clean_row_explanation(r.get('explanation', ''))
         r['explanation'] = clean_e
         if clean_e:
             task_expl_parts.append(clean_e)
@@ -520,19 +736,38 @@ for t in fipi:
         row_letters = []
 
         if task_num in ['9', '10', '11', '12']:
+            # Extract per-word isolated explanations for this row
+            sliced_expls = slice_row_explanations(raw_words, r.get('explanation', ''))
+
             for w_idx, w in enumerate(raw_words):
                 core, ctx = extract_core_and_context(w)
                 parts = re.split(r'\.\.+|_{1,}', core)
                 p = parts[0] if len(parts) > 0 else ''
                 s = parts[1] if len(parts) > 1 else ''
 
-                # Resolve letter and rule with full task explanation
+                isolated_seg = sliced_expls[w_idx] if w_idx < len(sliced_expls) else None
+
+                # Resolve letter and rule
                 letter, topic, rule_text = resolve_letter_and_rule(task_num, p, s, ctx, full_task_expl, '')
                 solved_cap = p + ('' if letter == '—' else letter.upper()) + s
                 full_solved = f"{solved_cap} {ctx}".strip() if ctx else solved_cap
                 row_solved_words.append(full_solved)
                 row_letters.append(letter)
-                solved_map_by_fipi_word[(task_id, r_idx, w_idx)] = (full_solved, letter, topic, rule_text, p, s, ctx)
+
+                # If isolated segment exists, use it; otherwise synthesize clean single-word explanation
+                final_isolated_expl = isolated_seg if isolated_seg else synthesize_word_explanation(task_num, p, letter, s, ctx)
+                final_isolated_expl = polish_word_segment(final_isolated_expl)
+
+                solved_map_by_fipi_word[(task_id, r_idx, w_idx)] = (
+                    full_solved, letter, topic, rule_text, p, s, ctx, final_isolated_expl
+                )
+
+                stem = p + '..' + s
+                clean_full = clean_str(full_solved)
+                if (task_num, stem) not in fipi_isolated_by_stem:
+                    fipi_isolated_by_stem[(task_num, stem)] = (final_isolated_expl, topic, rule_text)
+                if (task_num, clean_full) not in fipi_isolated_by_word:
+                    fipi_isolated_by_word[(task_num, clean_full)] = (final_isolated_expl, topic, rule_text)
 
             # Master Row Correctness Check: all letters in row identical and not '—'
             all_identical = (len(row_letters) >= 2 and len(set(row_letters)) == 1 and row_letters[0] != '—')
@@ -545,15 +780,29 @@ for t in fipi:
                 r['isCorrectRow'] = False
 
         elif task_num == '15':
-            # Task 15 row processing
             r['solvedWords'] = r.get('solvedWords', raw_words)
+            t15_num_map = extract_task_15_explanations(r.get('explanation', ''))
             for w_idx, w in enumerate(raw_words):
-                solved_map_by_fipi_word[(task_id, r_idx, w_idx)] = (w, '', t.get('topic', ''), full_task_expl, '', '', '')
+                isolated_seg = t15_num_map.get(w_idx + 1, '')
+                solved_map_by_fipi_word[(task_id, r_idx, w_idx)] = (
+                    w, '', t.get('topic', ''), full_task_expl, '', '', '', isolated_seg
+                )
 
-        elif task_num in ['13', '14']:
+        elif task_num == '14':
             r['solvedWords'] = r.get('solvedWords', raw_words)
+            t14_map = extract_task_14_explanations(r.get('explanation', ''))
             for w_idx, w in enumerate(raw_words):
-                solved_map_by_fipi_word[(task_id, r_idx, w_idx)] = (w, '', t.get('topic', ''), full_task_expl, '', '', '')
+                solved_map_by_fipi_word[(task_id, r_idx, w_idx)] = (
+                    w, '', t.get('topic', ''), full_task_expl, '', '', '', ''
+                )
+
+        elif task_num == '13':
+            r['solvedWords'] = r.get('solvedWords', raw_words)
+            clean_e = clean_row_explanation(r.get('explanation', ''))
+            for w_idx, w in enumerate(raw_words):
+                solved_map_by_fipi_word[(task_id, r_idx, w_idx)] = (
+                    w, '', t.get('topic', ''), full_task_expl, '', '', '', clean_e
+                )
 
     if task_num in ['9', '10', '11', '12']:
         t['correctIndices'] = [i + 1 for i, r in enumerate(rows) if r.get('isCorrectRow')]
@@ -599,18 +848,44 @@ for w in all_words:
             pass
 
     if task_num in ['9', '10', '11', '12']:
+        p = clean_str(p_raw)
+        s = clean_str(s_raw)
+        ctx = ctx_raw
+
         if linked_fipi and linked_fipi[1] and linked_fipi[1] != '—':
             letter = linked_fipi[1]
             topic = linked_fipi[2]
             rule_text = linked_fipi[3]
-            p = linked_fipi[4] if linked_fipi[4] else clean_str(p_raw)
-            s = linked_fipi[5] if linked_fipi[5] else clean_str(s_raw)
-            ctx = linked_fipi[6] if linked_fipi[6] else ctx_raw
+            p = linked_fipi[4] if linked_fipi[4] else p
+            s = linked_fipi[5] if linked_fipi[5] else s
+            ctx = linked_fipi[6] if linked_fipi[6] else ctx
+            isolated_expl = linked_fipi[7] if len(linked_fipi) > 7 else ''
         else:
-            p = clean_str(p_raw)
-            s = clean_str(s_raw)
-            ctx = ctx_raw
             letter, topic, rule_text = resolve_letter_and_rule(task_num, p, s, ctx, rule_raw, current_letter)
+            isolated_expl = ''
+
+        # Match stem or word fallback
+        stem = p + '..' + s
+        clean_w = clean_str(f"{p}{letter}{s}")
+        if not isolated_expl:
+            if (task_num, stem) in fipi_isolated_by_stem:
+                isolated_expl, topic, rule_text = fipi_isolated_by_stem[(task_num, stem)]
+            elif (task_num, clean_w) in fipi_isolated_by_word:
+                isolated_expl, topic, rule_text = fipi_isolated_by_word[(task_num, clean_w)]
+
+        # If isolated explanation exists, use it as rule, and classify topic with it!
+        final_rule = isolated_expl if isolated_expl else synthesize_word_explanation(task_num, p, letter, s, ctx)
+        final_rule = polish_word_segment(final_rule)
+
+        # Classify topic accurately using isolated explanation (avoid false contamination!)
+        if task_num == '9':
+            expl_lower = final_rule.lower()
+            if any(k in expl_lower for k in ['гар/гор', 'зар/зор', 'кас/кос', 'лаг/лож', 'раст/ращ/рос', 'скак/скоч', 'мак/мок', 'равн/ровн', 'твар/твор', 'клан/клон', 'плав/плов', 'бер/бир', 'дер/дир', 'мер/мир', 'пер/пир', 'тер/тир', 'блест/блист', 'стел/стил', 'жег/жиг', 'чет/чит', 'чередован']):
+                topic = 'Чередование корней'
+            elif 'проверочное слово' in expl_lower or 'провер' in expl_lower:
+                topic = 'Проверяемая безударная гласная в корне'
+            elif 'словарное слово' in expl_lower or 'непровер' in expl_lower:
+                topic = 'Словарное слово (непроверяемая в корне)'
 
         w['missingLetter'] = letter
         w['prefix'] = p
@@ -619,13 +894,12 @@ for w in all_words:
         w['wordGap'] = f"{p}..{s}"
         w['topic'] = topic
         w['category'] = topic
-        w['rule'] = rule_text
+        w['rule'] = final_rule
         w['context'] = ctx
         healed_words_count += 1
 
     elif task_num == '13':
         raw_word = w.get('word', '')
-        # Task 13: strictly СЛИТНО or РАЗДЕЛЬНО
         w_clean = clean_str(raw_word)
         if 'не ' in w_clean or current_letter == 'РАЗДЕЛЬНО':
             w['missingLetter'] = 'РАЗДЕЛЬНО'
@@ -642,7 +916,7 @@ for w in all_words:
         ans, solved_word, rule_txt = resolve_task_14_word(raw_word, rule_raw)
         w['missingLetter'] = ans
         w['word'] = solved_word
-        w['rule'] = rule_txt
+        w['rule'] = polish_word_segment(rule_txt)
         w['topic'] = 'Слитное, дефисное и раздельное написание слов'
         w['category'] = 'Слитное, дефисное и раздельное написание слов'
         healed_words_count += 1
@@ -650,11 +924,13 @@ for w in all_words:
     elif task_num == '15':
         raw_word = w.get('word', '')
         ans, solved_word, rule_txt = resolve_task_15_word(w_id, raw_word, p_raw, s_raw, current_letter, rule_raw, linked_fipi_task)
+        if linked_fipi and len(linked_fipi) > 7 and linked_fipi[7]:
+            rule_txt = linked_fipi[7]
         w['missingLetter'] = ans
         w['word'] = solved_word
         w['prefix'] = clean_str(p_raw)
         w['suffix'] = clean_str(s_raw)
-        w['rule'] = rule_txt
+        w['rule'] = polish_word_segment(rule_txt)
         w['topic'] = 'Правописание -Н- и -НН- в различных частях речи'
         w['category'] = 'Правописание -Н- и -НН- в различных частях речи'
         healed_words_count += 1
@@ -683,7 +959,6 @@ for s in sprint:
     expl_raw = s.get('explanation', '')
     current_ans = s.get('answer', '')
 
-    # Try to match with all_words by ID
     w_cand_id = 'w-' + s_id[3:] if s_id.startswith('sp-') else 'w-' + s_id
     matched_word = all_words_by_id.get(w_cand_id)
 
@@ -706,14 +981,17 @@ for s in sprint:
         s['suffix'] = suf
         s['context'] = ctx if ctx else s.get('context', '')
         s['topic'] = topic
-        s['rule'] = rule
-        s['explanation'] = f"В слове «{p}{ans.upper()}{suf}» пишется буква «{ans.upper()}»."
+        s['rule'] = polish_word_segment(rule)
+        s['explanation'] = polish_word_segment(rule)
         s['options'] = get_smart_options(task_num, ans, p, suf)
         sprint_repaired += 1
 
     elif task_num == '13':
         ans = matched_word['missingLetter'] if matched_word else ('РАЗДЕЛЬНО' if 'не ' in (p_raw + s_raw).lower() else 'СЛИТНО')
+        rule = matched_word['rule'] if matched_word else f"Слово «{(p_raw + ' ' + s_raw).strip()}» пишется {ans} с НЕ."
         s['answer'] = ans
+        s['rule'] = polish_word_segment(rule)
+        s['explanation'] = polish_word_segment(rule)
         s['options'] = ['СЛИТНО', 'РАЗДЕЛЬНО']
         s['topic'] = 'Правописание НЕ и НИ'
         sprint_repaired += 1
@@ -721,9 +999,12 @@ for s in sprint:
     elif task_num == '14':
         if matched_word:
             ans = matched_word['missingLetter']
+            rule = matched_word['rule']
         else:
-            ans, _, _ = resolve_task_14_word(p_raw + ' ' + s_raw)
+            ans, _, rule = resolve_task_14_word(p_raw + ' ' + s_raw)
         s['answer'] = ans
+        s['rule'] = polish_word_segment(rule)
+        s['explanation'] = polish_word_segment(rule)
         s['options'] = get_smart_options('14', ans, p_raw, s_raw)
         s['topic'] = 'Слитное, дефисное и раздельное написание слов'
         sprint_repaired += 1
@@ -735,7 +1016,8 @@ for s in sprint:
         else:
             ans, _, rule = resolve_task_15_word(s_id, p_raw + s_raw, p_raw, s_raw, current_ans, expl_raw)
         s['answer'] = ans
-        s['rule'] = rule
+        s['rule'] = polish_word_segment(rule)
+        s['explanation'] = polish_word_segment(rule)
         s['options'] = ['Н', 'НН']
         s['topic'] = 'Правописание -Н- и -НН- в различных частях речи'
         sprint_repaired += 1
