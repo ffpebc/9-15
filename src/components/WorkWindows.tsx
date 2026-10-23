@@ -544,15 +544,17 @@ const TASK_KEY_EXCEPTIONS: Record<TaskId, string[]> = {
 export function cleanDisplayText(text: string): string {
   if (!text) return '';
   let s = String(text);
-  s = s.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\\«/g, '«').replace(/\\»/g, '»').replace(/\\"/g, '"');
+  s = s.replace(/\\+n/g, '\n').replace(/\\+r/g, '').replace(/\\+t/g, ' ').replace(/\\+«/g, '«').replace(/\\+»/g, '»').replace(/\\+"/g, '"');
   s = s.replace(/&(?:ldquo|rdquo|quot);/g, '"')
        .replace(/&(?:rarr|rightarrow);/g, '→')
        .replace(/&(?:laquo|raquo);/g, '«')
        .replace(/&[a-zA-Z0-9#]+;/g, '');
   s = s.replace(/<[^>]+>/g, '');
-  s = s.replace(/[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+.*$/s, '');
+  s = s.replace(/\.?\s*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+.*$/si, '');
+  s = s.replace(/\.?\s*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+(?:\s*,\s*\d+\))?/gi, '');
   s = s.replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '');
-  s = s.replace(/^[1-5]\s*[\)\.\-–]\s*/gm, '');
+  s = s.replace(/(?:^|\n|\.\s*)[1-5]\s*[\)\.\-–:]\s*/g, (m) => m.startsWith('.') ? '. ' : m.startsWith('\n') ? '\n' : '');
+  s = s.replace(/^[1-5]\s*[\)\.\-–:]\s*/gm, '');
   s = s.replace(/\bпров\.?\s*гл\.?\s*[:—\-–]?/g, 'проверочное слово: ')
        .replace(/\bнепровер(?:яемая)?\.?\s*гл(?:асная)?\.?(?:\s*\(словарное слово\))*/g, 'непроверяемая гласная (словарное слово)')
        .replace(/\(словарное слово\)(?:\s*\(словарное слово\))+/g, '(словарное слово)')
@@ -567,6 +569,113 @@ export function cleanDisplayText(text: string): string {
        .replace(/[,;]\s*\([^\)]*$/g, '')
        .replace(/[,;.\s]+$/g, '');
   return s.trim();
+}
+
+export function isolateTargetWordExplanation(
+  explanation: string,
+  targetWord?: string | null
+): string {
+  if (!explanation) return '';
+  const cleaned = cleanDisplayText(explanation);
+  if (!targetWord || !cleaned) return cleaned;
+
+  const normTarget = targetWord
+    .replace(/[().,;!?]/g, '')
+    .trim()
+    .toLowerCase();
+
+  if (!normTarget) return cleaned;
+
+  const rawSegments = cleaned.split(/\n+|(?<=[.;])\s+/);
+  const segments = rawSegments
+    .map((seg) => cleanDisplayText(seg))
+    .filter((seg) => seg.length > 0);
+
+  if (segments.length <= 1) {
+    const dashParts = cleaned.split(/(?=[А-Яа-яЁё]+\s*—)/g);
+    if (dashParts.length > 1) {
+      const match = dashParts.find((part) => part.toLowerCase().includes(normTarget));
+      if (match) return cleanDisplayText(match);
+    }
+    return cleaned;
+  }
+
+  const exactMatch = segments.find((seg) => seg.toLowerCase().includes(normTarget));
+  if (exactMatch) {
+    return cleanDisplayText(exactMatch);
+  }
+
+  if (normTarget.length >= 4) {
+    const prefix4 = normTarget.slice(0, 4);
+    const prefixMatch = segments.find((seg) => seg.toLowerCase().includes(prefix4));
+    if (prefixMatch) {
+      return cleanDisplayText(prefixMatch);
+    }
+  }
+
+  const dashParts = cleaned.split(/(?=[А-Яа-яЁё]+\s*—)/g);
+  if (dashParts.length > 1) {
+    const dashMatch = dashParts.find((part) => part.toLowerCase().includes(normTarget));
+    if (dashMatch) {
+      return cleanDisplayText(dashMatch);
+    }
+  }
+
+  return cleanDisplayText(segments[0]);
+}
+
+export interface StructuredExplanation {
+  targetWord?: string;
+  checkWord?: string;
+  ruleNote: string;
+}
+
+export function parseStructuredExplanation(
+  text: string,
+  fallbackWord?: string | null
+): StructuredExplanation {
+  const cleaned = cleanDisplayText(text);
+  if (!cleaned) {
+    return { ruleNote: '' };
+  }
+
+  let targetWord = fallbackWord || '';
+  let checkWord = '';
+  let ruleNote = cleaned;
+
+  const dashMatch = cleaned.match(/^([А-Яа-яЁё]+(?:\s*\([^\)]+\))?)\s*—\s*(.+)$/s);
+  if (dashMatch) {
+    if (!targetWord) {
+      targetWord = dashMatch[1].trim();
+    }
+    ruleNote = dashMatch[2].trim();
+  }
+
+  const cwMatch1 = ruleNote.match(/(?:проверочное слово|проверка)[:—\-–\s]+[«"']?([А-Яа-яЁё\u0300-\u036f]+)[»"']?/i);
+  if (cwMatch1) {
+    checkWord = cwMatch1[1];
+  } else {
+    const parenMatch = ruleNote.match(/\(([А-Яа-яЁё\u0300-\u036f]+)\)/);
+    if (parenMatch && !/^(?:словарное|исключение|сущ|прил|глаг|нареч|местоим)/i.test(parenMatch[1])) {
+      checkWord = parenMatch[1];
+      ruleNote = ruleNote.replace(`(${checkWord})`, '').trim();
+    }
+  }
+
+  ruleNote = ruleNote.replace(/[,;.\s]+$/, '').trim();
+  if (ruleNote && !ruleNote.endsWith('.')) {
+    ruleNote += '.';
+  }
+
+  if (ruleNote.length > 0) {
+    ruleNote = ruleNote.charAt(0).toUpperCase() + ruleNote.slice(1);
+  }
+
+  return {
+    targetWord: targetWord || undefined,
+    checkWord: checkWord || undefined,
+    ruleNote,
+  };
 }
 
 function splitFormulaSteps(rawExplanation: string): { head: string; tail: string } {
@@ -609,7 +718,8 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
   staggerIndex = 0,
   forceCollapsed,
 }) => {
-  const cleanExpl = cleanDisplayText(explanation);
+  const isolatedExpl = isolateTargetWordExplanation(explanation, wordTitle);
+  const cleanExpl = cleanDisplayText(isolatedExpl);
   const cleanRuleText = cleanDisplayText(rule || '');
   const isFipi5Row = question?.kind === 'fipi' || cleanExpl.includes('Строка ') || cleanExpl.includes(';');
   const formula = splitFormulaSteps(cleanExpl);
@@ -904,12 +1014,6 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
   const comparison = TASK_RULE_COMPARISON[task];
   const exceptionChips = TASK_KEY_EXCEPTIONS[task] || [];
 
-  const rawExplanation = cleanDisplayText(
-    activeError?.explanation ||
-    (activeQuestion?.kind === 'sprint' ? activeQuestion.explanation : '') ||
-    ''
-  );
-  const ruleText = cleanDisplayText(activeError?.rule || activeQuestion?.rule || '');
   const userChoice = activeError?.userChoice;
   const correctChoice =
     activeError?.correctChoice ||
@@ -932,6 +1036,21 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
           )
         : `${activeQuestion.prefix}${activeQuestion.answer.toLowerCase()}${activeQuestion.suffix}`
       : null);
+
+  const rawExplanation = cleanDisplayText(
+    isolateTargetWordExplanation(
+      activeError?.explanation ||
+      (activeQuestion?.kind === 'sprint' ? activeQuestion.explanation : '') ||
+      '',
+      solvedWordPreview
+    )
+  );
+
+  const parsedExplanation = useMemo(() => {
+    return parseStructuredExplanation(rawExplanation, solvedWordPreview);
+  }, [rawExplanation, solvedWordPreview]);
+
+  const ruleText = cleanDisplayText(activeError?.rule || activeQuestion?.rule || '');
 
   const contextText =
     activeError?.context ||
@@ -1057,9 +1176,10 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
           )}
 
           {/* Full Explanation Box */}
-          {rawExplanation && (
+          {/* Structured Explanation Box */}
+          {(parsedExplanation.ruleNote || parsedExplanation.checkWord) && (
             <div
-              className="p-3 rounded-2xl flex flex-col gap-1.5 mt-2 border border-[var(--ios-separator)]/60"
+              className="p-3.5 rounded-2xl flex flex-col gap-2 mt-2 border border-[var(--ios-separator)]/60"
               style={{ background: 'var(--ios-bg-secondary)' }}
             >
               <div
@@ -1069,14 +1189,36 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
                 <svg className="w-3.5 h-3.5 shrink-0">
                   <use href="#sf-sparkles" />
                 </svg>
-                <span>Полное объяснение:</span>
+                <span>Разбор орфограммы:</span>
               </div>
-              <div
-                className="text-[13px] sm:text-[13.5px] font-medium leading-relaxed break-words whitespace-pre-line"
-                style={{ color: 'var(--ios-label)' }}
-              >
-                {rawExplanation}
-              </div>
+
+              {/* Check Word & Transformation Badge */}
+              {parsedExplanation.checkWord && (
+                <div className="flex items-center gap-2">
+                  <div
+                    className="px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold flex items-center gap-1.5"
+                    style={{
+                      background: 'var(--ios-green-soft)',
+                      color: 'var(--ios-green)',
+                    }}
+                  >
+                    <span>🔍 Проверка:</span>
+                    <span className="font-black underline decoration-2 underline-offset-2">
+                      {parsedExplanation.checkWord}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Rule explanation note */}
+              {parsedExplanation.ruleNote && (
+                <div
+                  className="text-[13px] sm:text-[13.5px] font-medium leading-relaxed break-words"
+                  style={{ color: 'var(--ios-label)' }}
+                >
+                  {parsedExplanation.ruleNote}
+                </div>
+              )}
             </div>
           )}
 

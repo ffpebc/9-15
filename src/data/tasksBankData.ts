@@ -99,11 +99,12 @@ if (typeof window !== 'undefined' && 'caches' in window) {
     window.caches.delete('ege-bank-cache-v5');
     window.caches.delete('ege-bank-cache-v6');
     window.caches.delete('ege-bank-cache-v7');
+    window.caches.delete('ege-bank-cache-v8');
   } catch {}
 }
 
 async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<any> {
-  const cacheName = 'ege-bank-cache-v8';
+  const cacheName = 'ege-bank-cache-v9';
   let cache: Cache | null = null;
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {

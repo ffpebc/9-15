@@ -4,11 +4,29 @@ import {
   encodeBackupCode,
   decodeBackupCode,
 } from './trainerLogic';
+import { cleanDisplayText, isolateTargetWordExplanation } from '../components/WorkWindows';
 
 const STORAGE_KEY = 'ege_trainer_ios27_v3';
 const IDB_NAME = 'ege_trainer_ios27_db';
 const IDB_STORE = 'state_store';
 const DEFAULT_HOSTED_PIN = 'HOSTED_DEFAULT';
+
+export function sanitizeLoadedState(state: TrainerState): TrainerState {
+  if (!state || !Array.isArray(state.errorBank)) return state;
+  const sanitizedErrors = state.errorBank.map((err) => {
+    const wordKey = err.correctWord || err.wordDisplay;
+    const isolated = isolateTargetWordExplanation(err.explanation, wordKey);
+    return {
+      ...err,
+      explanation: cleanDisplayText(isolated),
+      rule: cleanDisplayText(err.rule || ''),
+    };
+  });
+  return {
+    ...state,
+    errorBank: sanitizedErrors,
+  };
+}
 
 function saveToIndexedDB(code: string): void {
   try {
@@ -51,7 +69,8 @@ export function loadFromIndexedDB(): Promise<TrainerState | null> {
         getReq.onsuccess = () => {
           const val = getReq.result;
           if (typeof val === 'string' && val.startsWith('EGE27-')) {
-            resolve(decodeBackupCode(val));
+            const decoded = decodeBackupCode(val);
+            resolve(decoded ? sanitizeLoadedState(decoded) : null);
           } else {
             resolve(null);
           }
@@ -72,7 +91,7 @@ export function loadInitialStateSync(): TrainerState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw && raw.startsWith('EGE27-')) {
       const decoded = decodeBackupCode(raw, fallback);
-      if (decoded) return decoded;
+      if (decoded) return sanitizeLoadedState(decoded);
     }
   } catch {
     // Ignore
@@ -82,7 +101,7 @@ export function loadInitialStateSync(): TrainerState {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (raw && raw.startsWith('EGE27-')) {
       const decoded = decodeBackupCode(raw, fallback);
-      if (decoded) return decoded;
+      if (decoded) return sanitizeLoadedState(decoded);
     }
   } catch {
     // Ignore
@@ -91,13 +110,13 @@ export function loadInitialStateSync(): TrainerState {
   try {
     if (typeof window.name === 'string' && window.name.startsWith('EGE27-')) {
       const decoded = decodeBackupCode(window.name, fallback);
-      if (decoded) return decoded;
+      if (decoded) return sanitizeLoadedState(decoded);
     }
   } catch {
     // Ignore
   }
 
-  return fallback;
+  return sanitizeLoadedState(fallback);
 }
 
 export function persistStateMultiLayer(state: TrainerState): string {
