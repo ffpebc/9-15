@@ -165,10 +165,10 @@ export async function loadFullDataBank(): Promise<boolean> {
   isFullBankLoading = true;
 
   try {
-    const cdnBase = 'https://cdn.jsdelivr.net/gh/ffpebc/9-15@main/src/data';
-    const rawBase = 'https://raw.githubusercontent.com/ffpebc/9-15/main/src/data';
+    const cdnBase = 'https://cdn.jsdelivr.net/gh/ffpebc/9-15@data/src/data';
+    const rawBase = 'https://raw.githubusercontent.com/ffpebc/9-15/data/src/data';
 
-    const vParam = '?v=8';
+    const vParam = '?v=9';
     const [allWordsData, fipiData, sprintData] = await Promise.all([
       fetchJsonWithCache(`${cdnBase}/allWordsBank9_15.json${vParam}`, `${rawBase}/allWordsBank9_15.json${vParam}`),
       fetchJsonWithCache(`${cdnBase}/fipiTasksBank9_15.json${vParam}`, `${rawBase}/fipiTasksBank9_15.json${vParam}`),

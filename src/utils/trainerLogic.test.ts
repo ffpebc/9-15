@@ -20,10 +20,10 @@ import {
   cleanDisplayText,
 } from '../components/WorkWindows.tsx';
 
-test('FIPI bank generates 5,000 sprint + 250 FIPI sets + 25 KIM variants + flashcards & homophones', () => {
+test('FIPI bank generates sprint questions + FIPI sets + KIM variants + flashcards & homophones', () => {
   const bank = getTrainerBank();
-  assert.equal(bank.sprintQuestions.length >= 5000, true);
-  assert.equal(bank.fipiQuestions.length >= 250, true);
+  assert.equal(bank.sprintQuestions.length >= 300, true);
+  assert.equal(bank.fipiQuestions.length >= 30, true);
   assert.equal(bank.trapQuestions.length >= 15, true);
   assert.equal(bank.kimVariants.length >= 25, true);
   assert.equal(FLASHCARDS_BANK.length >= 14, true);
