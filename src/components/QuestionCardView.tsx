@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   TrainerQuestion,
   cleanQuestionRule,
@@ -83,15 +83,15 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
 
     const shortExplanation = (question.explanation || liveMeta.rule || '').trim();
 
-    const commitAnswer = (ok: boolean, opt: string) => {
+    const commitAnswer = useCallback((ok: boolean, opt: string) => {
       clearTimers();
       setIsExiting(true);
       setTimeout(() => {
         onAnswer(ok, opt);
       }, 160);
-    };
+    }, [onAnswer]);
 
-    const handlePickOption = (opt: string) => {
+    const handlePickOption = useCallback((opt: string) => {
       if (isAnswered) return;
       setSelectedChoice(opt);
       const ok = opt === question.answer;
@@ -108,7 +108,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
       answerTimerRef.current = setTimeout(() => {
         onAnswer(ok, opt);
       }, advanceTime);
-    };
+    }, [isAnswered, question.answer, onAnswer]);
 
     const renderWordWithSlot = () => {
       const slotStateClass = !isAnswered ? '' : isCorrect ? 'ok' : 'bad';
@@ -325,7 +325,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                 <div className="flex-1 flex flex-col items-start min-w-0 text-left">
                   <div className="flex items-center gap-1.5 w-full">
                     <span className="font-extrabold text-[13px] shrink-0">
-                      {isCorrect ? '✓ Верно!' : '✕ Ошибка'}
+                      {isCorrect ? 'Верно' : 'Ошибка'}
                     </span>
                     <span className="opacity-90 font-bold text-[12px] truncate">
                       {isCorrect ? `Ответ: ${question.answer}` : `Правильно: ${question.answer}`}
@@ -399,25 +399,25 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
   // ==========================================================================
   // 5-Row FIPI Format (EГЭ Realistic Mode)
   // ==========================================================================
-  const toggleRow = (rowIdx1Based: number) => {
+  const toggleRow = useCallback((rowIdx1Based: number) => {
     if (fipiSubmitted) return;
     setFipiSelectedRows((prev) =>
       prev.includes(rowIdx1Based)
         ? prev.filter((r) => r !== rowIdx1Based)
         : [...prev, rowIdx1Based].sort((a, b) => a - b)
     );
-  };
+  }, [fipiSubmitted]);
 
-  const handleCheckFipi = () => {
+  const handleCheckFipi = useCallback(() => {
     if (fipiSubmitted || fipiSelectedRows.length === 0) return;
     setFipiSubmitted(true);
     const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
     const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
     const ok = userStr === correctStr;
     setFipiResultOk(ok);
-  };
+  }, [fipiSubmitted, fipiSelectedRows, question.correctIndices]);
 
-  const handleProceedFipi = () => {
+  const handleProceedFipi = useCallback(() => {
     const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
     const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
     const ok = userStr === correctStr;
@@ -425,7 +425,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
     setTimeout(() => {
       onAnswer(ok, userStr || '—');
     }, 180);
-  };
+  }, [fipiSelectedRows, question.correctIndices, onAnswer]);
 
   const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
   const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
@@ -497,67 +497,122 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
             />
           </div>
 
-          {/* Numbered Word Cards (selectable / feedback states) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {question.rows.map((row, idx) => {
-              const rowNum = idx + 1;
-              const isSelected = fipiSelectedRows.includes(rowNum);
-              let rowState = isSelected ? 'selected' : '';
-              if (fipiSubmitted) {
-                if (row.isCorrectRow && isSelected) rowState = 'ok';
-                else if (row.isCorrectRow && !isSelected) rowState = 'missed';
-                else if (!row.isCorrectRow && isSelected) rowState = 'bad';
-              }
-              const rawWord = fipiSubmitted ? row.solvedWords[0] : row.words[0];
-              const displayWord = cleanWord(rawWord);
-              return (
-                <button
-                  key={rowNum}
-                  id={`fipi-row-${rowNum}`}
-                  type="button"
-                  disabled={fipiSubmitted}
-                  onClick={() => toggleRow(rowNum)}
-                  className={`fipi-row-cell ${rowState}`}
-                >
-                  <span
-                    className="w-6 h-6 rounded-full text-[12px] font-extrabold flex items-center justify-center shrink-0"
-                    style={{
-                      background: isSelected ? 'var(--ios-blue)' : 'var(--ios-bg-tertiary)',
-                      color: isSelected ? '#FFFFFF' : 'var(--ios-label)',
-                    }}
+          {/* Task 15 Pure Digit Selector (1, 2, 3, 4... without duplicate words during choice) */}
+          <div className="flex flex-col gap-2 my-1">
+            <div
+              className="text-[11px] font-bold text-center uppercase tracking-wider opacity-65"
+              style={{ color: 'var(--ios-label-sec)' }}
+            >
+              {fipiSubmitted ? 'Результат по номерам пропусков:' : 'Выберите цифры ответа:'}
+            </div>
+
+            <div className="flex items-center justify-center gap-2 sm:gap-3 w-full max-w-sm mx-auto">
+              {question.rows.map((row, idx) => {
+                const digit = idx + 1;
+                const isSelected = fipiSelectedRows.includes(digit);
+                let btnClass = 'flex-1 min-w-[50px] max-w-[76px] h-13 sm:h-14 rounded-2xl text-[20px] font-black flex items-center justify-center transition-all select-none shadow-xs active:scale-95 cursor-pointer';
+                let btnStyle: React.CSSProperties = {
+                  background: 'var(--ios-bg-secondary)',
+                  color: 'var(--ios-label)',
+                  border: '1.5px solid var(--ios-separator)',
+                };
+
+                if (fipiSubmitted) {
+                  if (row.isCorrectRow && isSelected) {
+                    btnStyle = {
+                      background: 'var(--ios-green-soft)',
+                      color: 'var(--ios-green)',
+                      border: '2px solid var(--ios-green)',
+                    };
+                  } else if (row.isCorrectRow && !isSelected) {
+                    btnStyle = {
+                      background: 'var(--ios-orange-soft)',
+                      color: 'var(--ios-orange)',
+                      border: '1.5px solid var(--ios-orange)',
+                    };
+                  } else if (!row.isCorrectRow && isSelected) {
+                    btnStyle = {
+                      background: 'var(--ios-red-soft)',
+                      color: 'var(--ios-red)',
+                      border: '2px solid var(--ios-red)',
+                    };
+                  } else {
+                    btnStyle = {
+                      background: 'var(--ios-bg-secondary)',
+                      color: 'var(--ios-label-sec)',
+                      border: '1px solid var(--ios-separator)',
+                      opacity: 0.45,
+                    };
+                  }
+                } else if (isSelected) {
+                  btnStyle = {
+                    background: 'var(--ios-blue)',
+                    color: '#FFFFFF',
+                    border: '2px solid var(--ios-blue)',
+                    boxShadow: '0 4px 14px rgba(0, 122, 255, 0.35)',
+                  };
+                  btnClass += ' scale-105';
+                }
+
+                return (
+                  <button
+                    key={digit}
+                    id={`fipi-row-${digit}`}
+                    type="button"
+                    disabled={fipiSubmitted}
+                    onClick={() => toggleRow(digit)}
+                    className={btnClass}
+                    style={btnStyle}
+                    aria-label={`Цифра ${digit}${isSelected ? ' (выбрана)' : ''}`}
                   >
-                    {rowNum}
-                  </span>
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="text-[13px] font-bold leading-snug">
-                      {displayWord}
+                    <span>{digit}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Explanations shown only AFTER answer submission */}
+            {fipiSubmitted && (
+              <div className="flex flex-col gap-1.5 mt-2 text-left">
+                {question.rows.map((row, idx) => {
+                  const digit = idx + 1;
+                  const solvedWord = cleanWord(row.solvedWords[0] || row.words[0]);
+                  return (
+                    <div
+                      key={digit}
+                      className="p-2.5 rounded-xl border border-[var(--ios-separator)] text-[12px]"
+                      style={{ background: 'var(--ios-bg-secondary)' }}
+                    >
+                      <div className="flex items-center gap-2 font-bold mb-0.5">
+                        <span
+                          className="w-5 h-5 rounded-full text-[11px] font-extrabold flex items-center justify-center shrink-0"
+                          style={{
+                            background: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-bg-tertiary)',
+                            color: row.isCorrectRow ? '#fff' : 'var(--ios-label-sec)',
+                          }}
+                        >
+                          {digit}
+                        </span>
+                        <span className="font-extrabold" style={{ color: 'var(--ios-label)' }}>
+                          {solvedWord}
+                        </span>
+                        <span
+                          className="text-[11px] ml-auto font-semibold"
+                          style={{ color: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-label-sec)' }}
+                        >
+                          {`пишется «${row.letter}»`}
+                        </span>
+                      </div>
+                      {row.explanation && (
+                        <div className="text-[11px] opacity-85 leading-snug pl-7" style={{ color: 'var(--ios-label-sec)' }}>
+                          {cleanExplanation(row.explanation)}
+                        </div>
+                      )}
                     </div>
-                    {fipiSubmitted && (
-                      <div
-                        className="text-[11px] mt-0.5 truncate font-semibold"
-                        style={{
-                          color: row.isCorrectRow
-                            ? 'var(--ios-green)'
-                            : 'var(--ios-label-sec)',
-                        }}
-                      >
-                        {row.isCorrectRow
-                          ? `✓ Подходит: пишется «${row.letter}»`
-                          : `Не подходит: пишется «${row.letter}»`}
-                      </div>
-                    )}
-                    {fipiSubmitted && row.explanation && (
-                      <div
-                        className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
-                        style={{ color: 'var(--ios-label-sec)' }}
-                      >
-                        {cleanExplanation(row.explanation)}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -605,10 +660,10 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                     >
                       {question.task === '13' || question.task === '14'
                         ? (row.isCorrectRow
-                            ? `✓ Подходит: ${row.letter}`
+                            ? `Подходит: ${row.letter}`
                             : `Не подходит: ${row.letter}`)
                         : (row.isCorrectRow
-                            ? `✓ Подходит: одна и та же буква «${row.letter}»`
+                            ? `Подходит: одна и та же буква «${row.letter}»`
                             : 'Разные буквы в ряду')}
                     </div>
                   )}
@@ -639,10 +694,10 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
               }}
             >
               {fipiResultOk ? (
-                <span>✓ Верно! Правильный ответ: <strong>{correctStr}</strong></span>
+                <span>Верно. Правильный ответ: <strong>{correctStr}</strong></span>
               ) : (
                 <span>
-                  ✕ Ошибка. Правильный ответ: <strong>{correctStr}</strong> (ваш выбор: <strong>{userStr || '—'}</strong>)
+                  Ошибка. Правильный ответ: <strong>{correctStr}</strong> (ваш выбор: <strong>{userStr || '—'}</strong>)
                 </span>
               )}
             </div>

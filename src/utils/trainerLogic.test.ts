@@ -328,5 +328,56 @@ test('All FIPI questions across tasks 9-15 in trainer bank have strictly valid r
   }
 });
 
+test('All sprint questions have answer strictly contained in options with zero hyphenated conjunction bugs', () => {
+  const bank = getTrainerBank();
+  for (const s of bank.sprintQuestions) {
+    assert.ok(s.options && s.options.includes(s.answer), `Sprint question ${s.id} answer "${s.answer}" not in options [${s.options?.join(', ')}]`);
+    if (s.task === '14') {
+      const raw = `${s.prefix || ''}${s.suffix || ''}`.replace(/[()]/g, '').trim().toUpperCase();
+      if (['ЗАТО', 'ПОТОМУ', 'ПОЭТОМУ', 'ОТТОГО', 'ПРИТОМ', 'ПРИЧЕМ', 'ТОЖЕ', 'ТАКЖЕ', 'ЧТОБЫ'].includes(raw)) {
+        assert.notEqual(s.answer, 'ДЕФИСНО', `Sprint question ${s.id} (${raw}) must not have answer ДЕФИСНО`);
+      }
+    }
+  }
+});
+
+test('Homophone pairs pair-15-1 and pair-15-3 have authentic solitary contexts with correct N/NN answers', () => {
+  const pair1 = HOMOPHONE_PAIRS_BANK.find((p) => p.id === 'pair-15-1');
+  assert.ok(pair1);
+  assert.ok(pair1.options.includes(pair1.correctOption));
+  const p1SingleWord = pair1.leftContext.includes('молодой спортсмен') ? pair1.leftAns : pair1.rightAns;
+  const p1DependentWord = pair1.leftContext.includes('на тренировке') ? pair1.leftAns : pair1.rightAns;
+  assert.equal(p1SingleWord, 'Н');
+  assert.equal(p1DependentWord, 'НН');
+  assert.equal(pair1.leftContext.includes('в плечо') || pair1.rightContext.includes('в плечо'), false);
+
+  const pair3 = HOMOPHONE_PAIRS_BANK.find((p) => p.id === 'pair-15-3');
+  assert.ok(pair3);
+  assert.ok(pair3.options.includes(pair3.correctOption));
+  const p3SingleWord = pair3.leftContext.includes('аппетитный картофель') ? pair3.leftAns : pair3.rightAns;
+  const p3DependentWord = pair3.leftContext.includes('с грибами') || pair3.leftWordGap.includes('с грибами') ? pair3.leftAns : pair3.rightAns;
+  assert.equal(p3SingleWord, 'Н');
+  assert.equal(p3DependentWord, 'НН');
+  assert.equal(pair3.leftContext.includes('на скорую руку') || pair3.rightContext.includes('на скорую руку'), false);
+});
+
+test('FIPI Task 14 explanations have zero contradictory hyphenated rules and deduplicated indices', () => {
+  const bank = getTrainerBank();
+  for (const q of bank.fipiQuestions) {
+    const uniqueIndices = new Set(q.correctIndices);
+    assert.equal(uniqueIndices.size, q.correctIndices.length, `FIPI question ${q.id} has duplicate correctIndices`);
+    if (q.task === '14') {
+      for (const r of q.rows) {
+        assert.equal(
+          /(?:ПО-ТОМУ|ПО-ЭТОМУ|ЗА-ТО|ОТ-ТОГО|ПРИ-ТОМ|ПРИ-ЧЕМ|ТО-ЖЕ|ТАК-ЖЕ|ЧТО-БЫ)/.test(r.explanation),
+          false,
+          `FIPI Task 14 question ${q.id} row has corrupted hyphenated conjunction in explanation: "${r.explanation}"`
+        );
+      }
+    }
+  }
+});
+
+
 
 

@@ -2123,12 +2123,13 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
     const fullLabel = cleanContext ? `${displayWord} ${cleanContext}` : displayWord;
     const key = item.id || (displayWord + '_' + item.task + '_' + cleanContext).toLowerCase().trim();
     if (!map.has(key)) {
+      const explicitRule = item.rule || '';
       map.set(key, {
         task: item.task as TaskId,
         word: fullLabel,
         highlight: item.missingLetter || (item as any).letter || '—',
         category: item.category || (item as any).topic || TASK_META[item.task as TaskId]?.title || `Задание № ${item.task}`,
-        note: cleanDisplayText(isolateTargetWordExplanation(item.rule || (item as any).explanation || '', displayWord)),
+        note: cleanDisplayText(explicitRule || isolateTargetWordExplanation((item as any).explanation || '', displayWord)),
         source: item.source || 'ФИПИ 2026–2027',
       });
     }
@@ -2144,12 +2145,13 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
       const fullLabel = cleanContext ? `${fullWord} ${cleanContext}` : fullWord;
       const key = (fullWord + '_' + sq.task + '_' + cleanContext).toLowerCase().trim();
       if (!map.has(key)) {
+        const explicitRule = sq.rule || '';
         map.set(key, {
           task: sq.task,
           word: fullLabel,
           highlight: sq.answer || '—',
           category: sq.topic || TASK_META[sq.task]?.title || `Задание № ${sq.task}`,
-          note: cleanDisplayText(isolateTargetWordExplanation(sq.rule || sq.explanation || '', fullWord)),
+          note: cleanDisplayText(explicitRule || isolateTargetWordExplanation(sq.explanation || '', fullWord)),
           source: sq.source || 'Банк ФИПИ / Школково',
         });
       }
@@ -2168,12 +2170,13 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
         const fullLabel = cleanContext ? `${fullWord} ${cleanContext}` : fullWord;
         const key = (fullWord + '_' + sq.task + '_' + cleanContext + '_' + idx).toLowerCase().trim();
         if (map.size < 5000 && !map.has(key)) {
+          const explicitRule = sq.rule || '';
           map.set(key, {
             task: sq.task,
             word: fullLabel,
             highlight: sq.answer || '—',
             category: sq.topic || TASK_META[sq.task]?.title || `Задание № ${sq.task}`,
-            note: cleanDisplayText(isolateTargetWordExplanation(sq.rule || sq.explanation || '', fullWord)),
+            note: cleanDisplayText(explicitRule || isolateTargetWordExplanation(sq.explanation || '', fullWord)),
             source: sq.source || 'Банк заданий ФИПИ 2026–2027',
           });
         }
@@ -2219,8 +2222,7 @@ export const DictionaryModal: React.FC<DictionaryModalProps> = React.memo(({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      cachedFullDatabaseEntries = null;
+    if (isOpen && !cachedFullDatabaseEntries) {
       setBankRev((r) => r + 1);
     }
   }, [isOpen]);
@@ -2569,3 +2571,6 @@ export const AppearanceModal: React.FC<AppearanceModalProps> = React.memo(({
     </SwipeableSheet>
   );
 });
+
+export const GlassSettingsModal = AppearanceModal;
+export type GlassSettingsModalProps = AppearanceModalProps;
