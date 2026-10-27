@@ -2316,6 +2316,117 @@ export function invalidateQuestionBankCache() {
   cachedQuestionBank = null;
 }
 
+export function cleanScraperArtifacts(text: string | undefined): string {
+  if (!text) return '';
+  return text
+    .replace(/\([Зз]\)/g, '(3)')
+    .replace(/«\.\.\.—\s*«\.\.\./g, '')
+    .replace(/—\s*«\.\.\.[^»]*»*/g, '')
+    .replace(/\s*—\s*«?\.\.\..*$/, '')
+    .replace(/«\.\.\./g, '')
+    .replace(/\.\.\.»/g, '')
+    .replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '')
+    .trim();
+}
+
+export function cleanWord(str: string | undefined): string {
+  if (!str) return '';
+  return str
+    .replace(/\([Зз]\)/g, '(3)')
+    .replace(/«\.\.\.—\s*«\.\.\./g, '')
+    .replace(/—\s*«\.\.\.[^»]*»*/g, '')
+    .replace(/\s*—\s*«?\.\.\..*$/, '')
+    .replace(/\s*—\s*.*$/, '') // In a single word, strip any trailing dash context or scraper snippet
+    .replace(/[«»]/g, '')
+    .replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '')
+    .trim();
+}
+
+export function cleanExplanation(str: string | undefined): string {
+  if (!str) return '';
+  return str
+    .replace(/\([Зз]\)/g, '(3)')
+    .replace(/«\.\.\.—\s*«\.\.\./g, '')
+    .replace(/—\s*«\.\.\.[^»]*»*/g, '')
+    .replace(/\s*—\s*«?\.\.\..*$/, '')
+    .replace(/«\.\.\./g, '')
+    .replace(/\.\.\.»/g, '')
+    .replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '')
+    .trim();
+}
+
+export function cleanQuestionRule(rule: string | undefined, task: string): string {
+  if (task === '15') {
+    if (rule) {
+      if (/пишется\s+(?:одна\s+буква\s+)?Н(?!Н)/i.test(rule) || /одна\s+буква\s+Н/i.test(rule)) {
+        return 'Укажите цифру(-ы), на месте которой(-ых) пишется Н.';
+      }
+      if (/пишется\s+НН/i.test(rule) || /две\s+буквы\s+НН/i.test(rule)) {
+        return 'Укажите цифру(-ы), на месте которой(-ых) пишется НН.';
+      }
+    }
+    return 'Укажите цифру(-ы), на месте которой(-ых) пишется НН (или Н).';
+  }
+  if (!rule) {
+    if (task === '13') return 'Укажите варианты ответов, в которых НЕ с выделенным словом пишется РАЗДЕЛЬНО (или СЛИТНО).';
+    return 'Укажите варианты ответов, в которых во всех словах одного ряда пропущена одна и та же буква.';
+  }
+  let cleaned = rule.replace(/\s*Предложение:\s*«?.*$/is, '').trim();
+  cleaned = cleanScraperArtifacts(cleaned).replace(/[«»]/g, '').trim();
+  return cleaned || rule;
+}
+
+export function resolveTask15Sentence(question: any): string {
+  let sent = ((question.sentence || question.instruction || '') as string).trim();
+
+  // If sentence is missing or empty, extract from rule if embedded
+  if (!sent && question.rule) {
+    const m = question.rule.match(/Предложение:\s*«?(.*)$/is);
+    if (m && m[1]) {
+      sent = m[1].replace(/»\s*$/, '').trim();
+    }
+  }
+
+  // Strip scraper artifacts and normalize homoglyphs
+  if (sent) {
+    sent = cleanScraperArtifacts(sent).replace(/[«»]/g, '').trim();
+  }
+
+  const rows = Array.isArray(question.rows) ? question.rows : [];
+  const gapDigits = new Set<number>();
+  if (sent) {
+    const matches = [...sent.matchAll(/([А-Яа-яЁё-]+)\((\d+)\)([А-Яа-яЁё-]*)/g)];
+    for (const m of matches) {
+      gapDigits.add(parseInt(m[2], 10));
+    }
+  }
+
+  const hasAllRowGaps =
+    rows.length === 0 ||
+    Array.from({ length: rows.length }, (_, i) => i + 1).every((d) => gapDigits.has(d));
+
+  // If missing, corrupted, or missing any of the row gap numbers, reconstruct cleanly from question.rows
+  if (!sent || !hasAllRowGaps || sent.length < 15) {
+    if (rows.length > 0) {
+      const parts = rows.map((r: any, i: number) => {
+        const raw = (r.words?.[0] || '').replace(/\([Зз]\)/g, '(3)');
+        const m = raw.match(/([А-Яа-яЁё-]+)\((\d+)\)([А-Яа-яЁё-]*)/);
+        if (m) return `${m[1]}(${m[2]})${m[3]}`;
+        const clean = cleanWord(raw);
+        if (/\.{2,}|…/.test(clean)) {
+          return clean.replace(/\.{2,}|…/, `(${i + 1})`);
+        }
+        return `${clean}(${i + 1})`;
+      });
+      sent = `В данном предложении пропущены буквы: ${parts.join(', ')}.`;
+    } else {
+      sent = 'Укажите цифры на месте пропусков в словах предложения.';
+    }
+  }
+
+  return sent;
+}
+
 export function getTrainerBank() {
   if (cachedQuestionBank) return cachedQuestionBank;
 
@@ -2327,38 +2438,20 @@ export function getTrainerBank() {
   const seenFipiSignatures = new Set<string>();
   const wordsInAuthenticFipi = new Set<string>();
 
-  const cleanScraper = (text: string | undefined): string => {
-    if (!text) return '';
-    return text
-      .replace(/«\.\.\.—\s*«\.\.\./g, '')
-      .replace(/—\s*«\.\.\.[^»]*»*/g, '')
-      .replace(/—\s*«\.\.\..*$/, '')
-      .replace(/«\.\.\./g, '')
-      .replace(/\.\.\.»/g, '')
-      .replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '')
-      .trim();
-  };
-
   // 1. Add authentic whole tasks from FIPI 2026-2027 demo and Shkolkovo (strictly deduplicated)
   if (Array.isArray(PARSED_FIPI_QUESTIONS)) {
     for (const rawFq of PARSED_FIPI_QUESTIONS) {
-      let rule = cleanScraper(rawFq.rule);
-      let sentence = cleanScraper(rawFq.sentence || (rawFq as any).instruction);
-      if (!sentence && rule.includes('Предложение:')) {
-        const m = rule.match(/Предложение:\s*«?([^»]+)»?/i);
-        if (m && m[1]) {
-          sentence = cleanScraper(m[1]);
-        }
-      }
-      if (rule.includes('Предложение:')) {
-        rule = rule.replace(/\s*Предложение:\s*«?.*$/is, '').trim();
-      }
+      if (rawFq.task !== '15' && rawFq.rows.length !== 5) continue;
+      if (rawFq.correctIndices.some((c) => c < 1 || c > rawFq.rows.length)) continue;
+
+      let rule = cleanQuestionRule(rawFq.rule, rawFq.task);
+      let sentence = rawFq.task === '15' ? resolveTask15Sentence(rawFq) : undefined;
 
       const rows: FipiRow[] = rawFq.rows.map((r) => ({
         ...r,
-        words: r.words.map((w) => cleanScraper(w)),
-        solvedWords: r.solvedWords.map((w) => cleanScraper(w)),
-        explanation: cleanScraper(r.explanation),
+        words: r.words.map((w) => (rawFq.task === '15' ? cleanWord(w) : cleanScraperArtifacts(w))),
+        solvedWords: r.solvedWords.map((w) => (rawFq.task === '15' ? cleanWord(w) : cleanScraperArtifacts(w))),
+        explanation: cleanExplanation(r.explanation),
       }));
 
       const fq: FipiQuestion = {
@@ -2394,9 +2487,9 @@ export function getTrainerBank() {
       if (seenSprintKeys.has(stemKey)) continue;
       seenSprintKeys.add(stemKey);
 
-      const cleanedContext = cleanScraper(rawSq.context);
-      const cleanedRule = cleanScraper(rawSq.rule);
-      const cleanedExplanation = cleanScraper(rawSq.explanation);
+      const cleanedContext = cleanScraperArtifacts(rawSq.context);
+      const cleanedRule = cleanScraperArtifacts(rawSq.rule);
+      const cleanedExplanation = cleanExplanation(rawSq.explanation);
 
       const classified = classifyWordSubtopicAndException(
         rawSq.task,

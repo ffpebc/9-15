@@ -1053,7 +1053,7 @@ for (const t of cleanFipiInput) {
       });
     });
 
-    if (newRows.length >= 4 && origCorrSet.size >= 1) {
+    if (newRows.length === 5 && origCorrSet.size >= 1 && Array.from(origCorrSet).every(c => c >= 1 && c <= 5)) {
       finalFipi.push({
         ...t,
         rule: `Укажите варианты ответов, в которых все выделенные слова пишутся ${targetMode === "ДЕФИСНО" ? "ЧЕРЕЗ ДЕФИС" : targetMode}. Запишите номера ответов.`,

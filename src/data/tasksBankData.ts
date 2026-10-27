@@ -87,7 +87,12 @@ export const PARSED_WORDS_DATABASE: Record<TaskId, WordEntry[]> = {
 export function refreshMaps() {
   const tasks: TaskId[] = ['9', '10', '11', '12', '13', '14', '15'];
   for (const t of tasks) {
-    PARSED_TASKS_MAP[t] = PARSED_FIPI_QUESTIONS.filter((q) => q.task === t);
+    PARSED_TASKS_MAP[t] = PARSED_FIPI_QUESTIONS.filter((q) => {
+      if (q.task !== t) return false;
+      if (t !== '15' && q.rows.length !== 5) return false;
+      if (q.correctIndices.some((c) => c < 1 || c > q.rows.length)) return false;
+      return true;
+    });
     PARSED_WORDS_DATABASE[t] = PARSED_WORDS.filter((w) => w.task === t);
   }
 }
@@ -97,14 +102,14 @@ refreshMaps();
 // Очищаем устаревший кэш с урезанной или поврежденной базой
 if (typeof window !== 'undefined' && 'caches' in window) {
   try {
-    for (let v = 1; v <= 13; v++) {
+    for (let v = 1; v <= 14; v++) {
       window.caches.delete(`ege-bank-cache-v${v}`);
     }
   } catch {}
 }
 
 async function fetchJsonWithCache(url: string, fallbackUrls: string[] = []): Promise<any> {
-  const cacheName = 'ege-bank-cache-v14';
+  const cacheName = 'ege-bank-cache-v15';
   let cache: Cache | null = null;
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {
@@ -153,7 +158,7 @@ export async function loadFullDataBank(): Promise<boolean> {
     const localBase = '/data';
     const rawGithubBase = 'https://raw.githubusercontent.com/ffpebc/9-15/data/public/data';
     const cdnBase = 'https://cdn.jsdelivr.net/gh/ffpebc/9-15@data/public/data';
-    const vParam = '?v=14';
+    const vParam = '?v=15';
     const [allWordsData, fipiData, sprintData] = await Promise.all([
       fetchJsonWithCache(`${localBase}/allWordsBank9_15.json${vParam}`, [
         `${rawGithubBase}/allWordsBank9_15.json${vParam}`,

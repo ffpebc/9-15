@@ -13,6 +13,11 @@ import {
   normalizeKimDigits,
   FLASHCARDS_BANK,
   HOMOPHONE_PAIRS_BANK,
+  cleanScraperArtifacts,
+  cleanWord,
+  cleanExplanation,
+  cleanQuestionRule,
+  resolveTask15Sentence,
 } from './trainerLogic.ts';
 
 test('FIPI bank generates sprint questions + FIPI sets + KIM variants + flashcards & homophones', () => {
@@ -236,5 +241,92 @@ test('Task 15 FIPI questions have authentic sentences, non-empty gap tokens, and
     }
   }
 });
+
+test('resolveTask15Sentence and clean helpers heal broken screenshot question format', () => {
+  const brokenQ = {
+    task: '15',
+    rule: 'Укажите цифру(-ы), на месте которой(-ых) пишется Н. Предложение: «глиня(1)ые — «...— «...глиня(1)ые...»»',
+    rows: [
+      {
+        words: ['глиня(1)ые — «...— «...глиня(1)ые...»'],
+        solvedWords: ['глиняные'],
+        letter: 'Н',
+        isCorrectRow: true,
+        explanation: 'глиняный — суффикс -ЯН- отыменного прилагательного → одна Н — «...глиня(1)ые...»',
+      },
+      {
+        words: ['глиня(2)ые — «...глиня(1)ые...»'],
+        solvedWords: ['глиняные'],
+        letter: 'Н',
+        isCorrectRow: true,
+        explanation: 'глиняный — суффикс -ЯН- отыменного прилагательного → одна Н',
+      },
+    ],
+    correctIndices: [1, 2],
+  };
+
+  const cleanedRule = cleanQuestionRule(brokenQ.rule, '15');
+  assert.equal(cleanedRule, 'Укажите цифру(-ы), на месте которой(-ых) пишется Н.');
+
+  const resolvedSent = resolveTask15Sentence(brokenQ);
+  assert.ok(resolvedSent.length >= 15, 'Resolved sentence must not be empty');
+  assert.equal(resolvedSent.includes('— «...'), false, 'Must not have scraper artifact');
+  assert.equal(resolvedSent.includes('«...—'), false, 'Must not have scraper artifact');
+  assert.equal(resolvedSent.includes('(1)'), true, 'Must contain gap (1)');
+  assert.equal(resolvedSent.includes('(2)'), true, 'Must contain gap (2)');
+
+  const cleanWord1 = cleanWord(brokenQ.rows[0].words[0]);
+  assert.equal(cleanWord1, 'глиня(1)ые');
+
+  const cleanWord2 = cleanWord(brokenQ.rows[1].words[0]);
+  assert.equal(cleanWord2, 'глиня(2)ые');
+
+  const cleanExp1 = cleanExplanation(brokenQ.rows[0].explanation);
+  assert.ok(cleanExp1.includes('глиняный — суффикс -ЯН- отыменного прилагательного → одна Н'));
+  assert.equal(cleanExp1.includes('— «...'), false);
+
+  // Test Cyrillic Ze homoglyph conversion
+  const homoglyphSent = resolveTask15Sentence({
+    task: '15',
+    sentence: 'На карти(1)е были изображе(2)ы ю(З)ая девушка и стари(4)ый дом.',
+    rows: [
+      { words: ['карти(1)е'], solvedWords: ['картиНе'] },
+      { words: ['изображе(2)ы'], solvedWords: ['изображеНы'] },
+      { words: ['ю(З)ая'], solvedWords: ['юНая'] },
+      { words: ['стари(4)ый'], solvedWords: ['стариННый'] },
+    ],
+  });
+  assert.equal(homoglyphSent.includes('(3)'), true, 'Cyrillic Ze must be converted to digit 3');
+  assert.equal(homoglyphSent.includes('(З)'), false);
+});
+
+test('All FIPI questions across tasks 9-15 in trainer bank have strictly valid row counts and indices', () => {
+  const bank = getTrainerBank();
+  for (const q of bank.fipiQuestions) {
+    assert.ok(q.rule, `Question ${q.id} must have a non-empty rule`);
+    assert.ok(q.correctIndices.length >= 1, `Question ${q.id} must have at least 1 correctIndex`);
+
+    if (q.task !== '15') {
+      assert.equal(q.rows.length, 5, `Question ${q.id} (task ${q.task}) must have exactly 5 rows`);
+    } else {
+      assert.ok(q.rows.length >= 2, `Question ${q.id} (task 15) must have at least 2 rows`);
+      const sent = q.sentence || q.instruction;
+      assert.ok(sent && sent.length >= 15, `Question ${q.id} (task 15) must have a non-empty sentence`);
+    }
+
+    for (const c of q.correctIndices) {
+      assert.ok(c >= 1 && c <= q.rows.length, `correctIndex ${c} out of range in ${q.id}`);
+    }
+
+    for (const r of q.rows) {
+      assert.ok(r.words.length >= 1, `Row in ${q.id} has empty words`);
+      assert.ok(r.solvedWords.length >= 1, `Row in ${q.id} has empty solvedWords`);
+      for (const w of r.words) {
+        assert.equal(w.includes('— «...'), false, `Scraper artifact in word "${w}" of ${q.id}`);
+      }
+    }
+  }
+});
+
 
 
