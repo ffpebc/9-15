@@ -111,7 +111,13 @@ interface SessionMistakeItem {
 }
 
 export default function App() {
-  const bank = useMemo(() => getTrainerBank(), []);
+  const [bankRev, setBankRev] = useState(0);
+  useEffect(() => {
+    const onLoaded = () => setBankRev((r) => r + 1);
+    window.addEventListener('ege-bank-loaded', onLoaded);
+    return () => window.removeEventListener('ege-bank-loaded', onLoaded);
+  }, []);
+  const bank = useMemo(() => getTrainerBank(), [bankRev]);
 
   const [state, setState] = useState<TrainerState>(() => loadInitialStateSync());
   const [activeTab, setActiveTab] = useState<ActiveTab>('workout');
@@ -402,8 +408,12 @@ export default function App() {
     HOMOPHONE_PAIRS_BANK[0];
 
   const currentKimVariant =
-    bank.kimVariants[kimVariantIdx % bank.kimVariants.length];
-  const currentKimTaskQuestion = currentKimVariant.tasks[kimActiveTask];
+    bank.kimVariants[kimVariantIdx % Math.max(1, bank.kimVariants.length)] ||
+    bank.kimVariants[0];
+  const currentKimTaskQuestion =
+    currentKimVariant?.tasks?.[kimActiveTask] ||
+    currentKimVariant?.tasks?.['9'] ||
+    bank.fipiQuestions[0];
 
   const handleSetTaskQty = (task: TaskId, newQty: number) => {
     const clamped = clampTaskQty(newQty);
@@ -723,8 +733,9 @@ export default function App() {
     setState((prev) => {
       let nextState = { ...prev };
       for (const t of TASK_IDS) {
-        const fq = currentKimVariant.tasks[t];
-        const expected = fq.correctIndices.join('');
+        const fq = currentKimVariant?.tasks?.[t];
+        if (!fq) continue;
+        const expected = (fq.correctIndices || []).join('');
         const userAns = normalizeKimDigits(kimAnswers[t] || '');
         const isOk = userAns === expected;
         if (isOk) variantCorrectCount++;
@@ -1413,9 +1424,13 @@ export default function App() {
                           const q = m.question;
                           const wordTitle =
                             q.kind === 'sprint'
-                              ? q.task === '13'
+                              ? q.task === '13' || q.task === '14'
                                 ? `${q.prefix.replace(/[()]/g, '')}${
-                                    q.answer === 'СЛИТНО' ? '' : ' '
+                                    q.answer === 'СЛИТНО'
+                                      ? ''
+                                      : q.answer === 'ДЕФИСНО'
+                                        ? '-'
+                                        : ' '
                                   }${q.suffix}`
                                 : `${q.prefix}${q.answer.toLowerCase()}${q.suffix}`
                               : `Задание № ${q.task} · 5 строк ФИПИ`;
@@ -1928,7 +1943,7 @@ export default function App() {
 
                           return (
                             <button
-                              key={opt}
+                              key={`pair-opt-${idx}-${opt}`}
                               type="button"
                               id={`pair-opt-btn-${idx}`}
                               disabled={pairSelectedOption !== null}
@@ -2033,8 +2048,9 @@ export default function App() {
                       <div className="kim-nav-grid">
                         {TASK_IDS.map((tId) => {
                           const userAns = normalizeKimDigits(kimAnswers[tId] || '');
-                          const expected =
-                            currentKimVariant.tasks[tId].correctIndices.join('');
+                          const expected = (
+                            currentKimVariant?.tasks?.[tId]?.correctIndices || []
+                          ).join('');
                           let checkClass = '';
                           if (kimChecked) {
                             checkClass =
@@ -2084,10 +2100,10 @@ export default function App() {
                               </button>
                             </div>
                             <div
-                              className="text-[11px] whitespace-nowrap mt-0.5"
+                              className="text-[11px] leading-snug mt-0.5"
                               style={{ color: 'var(--ios-label-sec)' }}
                             >
-                              Выберите 2–4 строки ({TASK_META[kimActiveTask].cheatPages})
+                              {currentKimTaskQuestion.rule} ({TASK_META[kimActiveTask].cheatPages})
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -2187,7 +2203,7 @@ export default function App() {
                             </span>
                             <span style={{ color: 'var(--ios-green)' }}>
                               Эталон ФИПИ:{' '}
-                              {currentKimTaskQuestion.correctIndices.join('')}
+                              {(currentKimTaskQuestion?.correctIndices || []).join('')}
                             </span>
                           </div>
                         )}

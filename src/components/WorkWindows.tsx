@@ -12,7 +12,7 @@ import {
   formatTask14SolvedWord,
 } from '../utils/trainerLogic';
 import { SwipeableSheet, LiquidGlassSegmented } from './LiquidGlassControls';
-import { PARSED_WORDS_DATABASE, PARSED_SPRINT_QUESTIONS } from '../data/tasksBankData.ts';
+import { PARSED_WORDS, PARSED_WORDS_DATABASE, PARSED_SPRINT_QUESTIONS } from '../data/tasksBankData.ts';
 import { classifyWordSubtopicAndException } from '../utils/wordClassifier.ts';
 
 /* ============================================================================
@@ -544,31 +544,216 @@ const TASK_KEY_EXCEPTIONS: Record<TaskId, string[]> = {
 export function cleanDisplayText(text: string): string {
   if (!text) return '';
   let s = String(text);
-  s = s.replace(/\\+n/g, '\n').replace(/\\+r/g, '').replace(/\\+t/g, ' ').replace(/\\+«/g, '«').replace(/\\+»/g, '»').replace(/\\+"/g, '"');
-  s = s.replace(/&(?:ldquo|rdquo|quot);/g, '"')
-       .replace(/&(?:rarr|rightarrow);/g, '→')
-       .replace(/&(?:laquo|raquo);/g, '«')
-       .replace(/&[a-zA-Z0-9#]+;/g, '');
+  // Truncate scraper tail metadata (e.g. .4b:T95d,1) or 4a:T729 or 3f:[[[ or Ответ:/Источник:)
+  s = s.replace(/(?:[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+|\b[0-9a-f]{2}:\[\[\[|\n\s*Ответ\s*:|\n\s*Источник\s*:).*$/is, '');
+  s = s
+    .replace(/\\+r\\+n/g, '\n')
+    .replace(/\\+n/g, '\n')
+    .replace(/\\+r/g, '')
+    .replace(/\\+«/g, '«')
+    .replace(/\\+»/g, '»')
+    .replace(/\\+"/g, '"');
+  s = s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&eacute;/gi, 'е́')
+    .replace(/&(?:ldquo|rdquo|quot);/gi, '"')
+    .replace(/&(?:rarr|rightarrow);/gi, '→')
+    .replace(/&(?:mdash|ndash);/gi, '—')
+    .replace(/&(?:laquo|raquo);/gi, '«')
+    .replace(/&[a-zA-Z0-9#]+;/g, '');
   s = s.replace(/<[^>]+>/g, '');
-  s = s.replace(/\.?\s*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+.*$/si, '');
-  s = s.replace(/\.?\s*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+(?:\s*,\s*\d+\))?/gi, '');
+  s = s.replace(/=>/g, '→');
   s = s.replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '');
-  s = s.replace(/(?:^|\n|\.\s*)[1-5]\s*[\)\.\-–:]\s*/g, (m) => m.startsWith('.') ? '. ' : m.startsWith('\n') ? '\n' : '');
-  s = s.replace(/^[1-5]\s*[\)\.\-–:]\s*/gm, '');
-  s = s.replace(/\bпров\.?\s*гл\.?\s*[:—\-–]?/g, 'проверочное слово: ')
-       .replace(/\bнепровер(?:яемая)?\.?\s*гл(?:асная)?\.?(?:\s*\(словарное слово\))*/g, 'непроверяемая гласная (словарное слово)')
-       .replace(/\(словарное слово\)(?:\s*\(словарное слово\))+/g, '(словарное слово)')
-       .replace(/\bЧГ\b/g, 'чередование корней')
-       .replace(/\bПГ,\s*([А-Яа-яЁё]+)/g, 'проверочное слово: «$1»')
-       .replace(/\bПГ\b/g, 'проверяемая безударная гласная')
-       .replace(/\bНГ\b/g, 'непроверяемая гласная (словарное слово)')
-       .replace(/\bискл\.(?!\w)/g, 'исключение')
-       .replace(/["“]([^"”]+)["”]/g, '«$1»');
+  s = s.replace(/^[1-5Зз]\s*[\)\.\-–:]\s*/gm, '');
+  s = s.replace(/(?:\n|\.\s*)[1-5Зз]\s*[\)\.\-–:]\s*/g, '\n');
+  s = s
+    .replace(/\bпров\.?\s*гл\.?\s*[:—\-–]?/g, 'проверочное слово: ')
+    .replace(/\bнепровер(?:яемая)?\.?\s*гл(?:асная)?\.?(?:\s*\(словарное слово\))*/g, 'непроверяемая гласная (словарное слово)')
+    .replace(/\(словарное слово\)(?:\s*\(словарное слово\))+/g, '(словарное слово)')
+    .replace(/\bЧГ\b/g, 'чередование корней')
+    .replace(/\bПГ,\s*([А-Яа-яЁё]+)/g, 'проверочное слово: «$1»')
+    .replace(/\bПГ\b/g, 'проверяемая безударная гласная')
+    .replace(/\bНГ\b/g, 'непроверяемая гласная (словарное слово)')
+    .replace(/\bискл\.(?!\w)/g, 'исключение')
+    .replace(/["“]([^"”]+)["”]/g, '«$1»');
   s = s.replace(/^([А-Яа-яЁё]+)[»"]\s*([—–-])/g, '«$1» $2');
-  s = s.replace(/[,;]\s*\([^\)]+\)\s*$/g, '')
-       .replace(/[,;]\s*\([^\)]*$/g, '')
-       .replace(/[,;.\s]+$/g, '');
+  // Only strip unclosed trailing parenthesis if truncated
+  s = s.replace(/[,;]?\s*\([^\)]*$/g, '').replace(/[,;.\s]+$/g, '');
   return s.trim();
+}
+
+function normalizeWordForMatch(w: string): string {
+  return String(w || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^а-яa-z]/g, '');
+}
+
+/**
+ * Splits a single line into individual word explanation segments, respecting parenthesis depth.
+ * Handles both:
+ * 1) "слово1 (разбор1), слово2 (контекст) (разбор2), слово3 (разбор3)"
+ * 2) "слово1 — разбор1, слово2 — разбор2"
+ * while keeping shared-rule lists like "слово1, слово2, слово3 — общее правило" together.
+ */
+function splitLineIntoWordChunks(line: string): string[] {
+  const trimmed = line.trim();
+  if (!trimmed) return [];
+
+  const chunks: string[] = [];
+  let current = '';
+  let parenDepth = 0;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === '(') {
+      parenDepth++;
+      current += ch;
+      continue;
+    }
+    if (ch === ')') {
+      parenDepth = Math.max(0, parenDepth - 1);
+      current += ch;
+      continue;
+    }
+
+    if (parenDepth === 0 && (ch === ';' || ch === ',')) {
+      const rest = trimmed.slice(i + 1).trimStart();
+      if (ch === ';') {
+        // Only split on `;` if `rest` starts a NEW word head followed by ` — ` or `(...)`,
+        // AND that leading word is not a rule continuation word (like "пишется", "слово", "можно", "поэтому", etc.)
+        const semiWordMatch = rest.match(
+          /^(?:\([^)]+\)\s*)?([А-Яа-яЁё\u0300-\u036f\-]+)(?:\s*\([^)]+\))?\s*(?:—|–|-\s|\()/
+        );
+        const firstWordLow = semiWordMatch
+          ? semiWordMatch[1].toLowerCase().replace(/ё/g, 'е')
+          : '';
+        const isContinuationWord =
+          /^(?:пишется|пишем|слово|слова|можно|нельзя|так|поэтому|следовательно|например|исключение|исключения|проверочное|проверка|инфинитив|глагол|причастие|деепричастие|наречие|прилагательное|существительное|местоимение|предлог|союз|частица|корень|корни|приставка|приставки|суффикс|суффиксы|окончание|выбор|зависит|употребляется|образует|имеет|сохраняется|меняется|относится|подбираем|определяем|смотрим|ставим|входит|сочетание|перед|после|между|при|без|для|или|либо|если|хотя|однако|зато|тоже|также)$/.test(
+            firstWordLow
+          );
+        if (semiWordMatch && !isContinuationWord) {
+          if (current.trim()) chunks.push(current.trim());
+          current = '';
+          while (i + 1 < trimmed.length && /\s/.test(trimmed[i + 1])) i++;
+          continue;
+        }
+        current += ch;
+        continue;
+      }
+
+      // At a top-level comma: check if `current` already has an explanation (a closed `)` or `—`/` - `)
+      // AND `rest` starts a new word explanation entry
+      const currentHasParenOrDash =
+        /\)/.test(current) || /\s(?:—|–|-\s)/.test(current);
+      const restStartsParentheticalWord =
+        /^(?:\([^)]+\)\s*)?[А-Яа-яЁё\u0300-\u036f\-]+(?:\s+[А-Яа-яЁё\u0300-\u036f\-]+)?(?:\s*\([^)]+\))?\s*\(/.test(
+          rest
+        );
+      const restStartsDashWord =
+        /^(?:\([^)]+\)\s*)?[А-Яа-яЁё\u0300-\u036f\-]+(?:\s*\([^)]+\))?\s+(?:—|–|-\s)/.test(
+          rest
+        );
+      // Also handle "слово1 (словарное), слово2, слово3 (общее правило)" where current ends with `)`
+      const currentEndsWithParen = /\)\s*$/.test(current);
+      const restStartsWordListWithParen =
+        /^[А-Яа-яЁё\u0300-\u036f\-]+(?:\s*,\s*[А-Яа-яЁё\u0300-\u036f\-]+)+\s*\(/.test(
+          rest
+        );
+
+      if (
+        currentHasParenOrDash &&
+        (restStartsParentheticalWord ||
+          restStartsDashWord ||
+          (currentEndsWithParen && restStartsWordListWithParen))
+      ) {
+        if (current.trim()) chunks.push(current.trim());
+        current = '';
+        while (i + 1 < trimmed.length && /\s/.test(trimmed[i + 1])) i++;
+        continue;
+      }
+    }
+
+    current += ch;
+  }
+
+  if (current.trim()) {
+    chunks.push(current.trim());
+  }
+
+  return chunks;
+}
+
+/**
+ * Extracts the top-level head (word/words) and body (explanation) from a single chunk.
+ */
+function splitChunkHeadAndBody(chunk: string): { head: string; body: string; hasExplanation: boolean } {
+  const s = chunk.trim();
+  if (!s) return { head: '', body: '', hasExplanation: false };
+
+  // 1. Check for top-level dash ` — `, ` – `, or ` - ` (at parenDepth === 0)
+  let parenDepth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '(') parenDepth++;
+    else if (ch === ')') parenDepth = Math.max(0, parenDepth - 1);
+    else if (parenDepth === 0 && (ch === '—' || ch === '–' || ch === '-')) {
+      const prevChar = i > 0 ? s[i - 1] : '';
+      const nextChar = i + 1 < s.length ? s[i + 1] : '';
+      // Must be surrounded by spaces (not a hyphen inside a word like пол-яблока or -лаг-)
+      if (/\s/.test(prevChar) && /\s/.test(nextChar)) {
+        const head = s.slice(0, i).trim();
+        const body = s.slice(i + 1).trim();
+        if (head && body) {
+          return { head, body, hasExplanation: true };
+        }
+      }
+    }
+  }
+
+  // 2. Check if the chunk ends with a top-level parenthetical `( ... )` after a short word head
+  if (s.endsWith(')')) {
+    let depth = 0;
+    let openIdx = -1;
+    for (let i = s.length - 1; i >= 0; i--) {
+      if (s[i] === ')') depth++;
+      else if (s[i] === '(') {
+        depth--;
+        if (depth === 0) {
+          openIdx = i;
+          break;
+        }
+      }
+    }
+    if (openIdx > 0) {
+      const head = s.slice(0, openIdx).trim();
+      const body = s.slice(openIdx + 1, s.length - 1).trim();
+      const headWordCount = head.replace(/\(.*?\)/g, '').trim().split(/\s+/).filter(Boolean).length;
+      if (head && body && headWordCount <= 4 && !head.includes(';') && !/пишется/i.test(head)) {
+        // Check if `body` is actually an explanation/check-word vs just a context noun like `(противника)` or `(из задания №9 ЕГЭ)`
+        const isContextPlaceholder = /^из задания/i.test(body);
+        const hasRuleKeywords =
+          /(?:проверочн|словарн|запомнить|чередован|корень|корн|приставк|суффикс|окончан|спряжен|глагол|причаст|деепричаст|прилагат|наречи|предлог|союз|частиц|местоим|исключен|пишется|пишем|буква|гласн|согласн|ударен|безударн|инфинитив|значен|слитно|раздельно|дефис|→|=>|—|:|;)/i.test(
+            body
+          );
+        const hasCapitalStress = /[А-ЯЁ]/.test(body) || /\u0301/.test(body);
+        const normHead = normalizeWordForMatch(head);
+        const normBody = normalizeWordForMatch(body);
+        const sharesRoot =
+          normHead.length >= 3 &&
+          normBody.length >= 3 &&
+          normHead.slice(0, 3) === normBody.slice(0, 3);
+
+        const isRealExplanation =
+          !isContextPlaceholder &&
+          (hasRuleKeywords || hasCapitalStress || sharesRoot || body.length > 22);
+        return { head, body, hasExplanation: isRealExplanation };
+      }
+    }
+  }
+
+  return { head: s, body: '', hasExplanation: false };
 }
 
 export function isolateTargetWordExplanation(
@@ -576,57 +761,112 @@ export function isolateTargetWordExplanation(
   targetWord?: string | null
 ): string {
   if (!explanation) return '';
-  const cleaned = cleanDisplayText(explanation);
-  if (!targetWord || !cleaned) return cleaned;
+  let s = String(explanation);
+  // Strip scraper tail metadata first so other tasks after .4b:T95d never pollute candidates
+  s = s.replace(/(?:[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+|\b[0-9a-f]{2}:\[\[\[|\n\s*Ответ\s*:|\n\s*Источник\s*:).*$/is, '');
+  s = s
+    .replace(/\\+r\\+n/g, '\n')
+    .replace(/\\+n/g, '\n')
+    .replace(/\\+r/g, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '');
 
-  const normTarget = targetWord
-    .replace(/[().,;!?]/g, '')
-    .trim()
-    .toLowerCase();
-
-  if (!normTarget) return cleaned;
-
-  const rawSegments = cleaned.split(/\n+|(?<=[.;])\s+/);
-  const segments = rawSegments
-    .map((seg) => cleanDisplayText(seg))
-    .filter((seg) => seg.length > 0);
-
-  if (segments.length <= 1) {
-    const dashParts = cleaned.split(/(?=[А-Яа-яЁё]+\s*—)/g);
-    if (dashParts.length > 1) {
-      const match = dashParts.find((part) => part.toLowerCase().includes(normTarget));
-      if (match) return cleanDisplayText(match);
-    }
-    return cleaned;
+  const rawTarget = (targetWord || '').replace(/\(.*?\)/g, '').trim();
+  const normTarget = normalizeWordForMatch(rawTarget);
+  if (!normTarget || normTarget.startsWith('задание')) {
+    return cleanDisplayText(s);
   }
 
-  const exactMatch = segments.find((seg) => seg.toLowerCase().includes(normTarget));
-  if (exactMatch) {
-    return cleanDisplayText(exactMatch);
-  }
+  // Split by newlines and numbered row prefixes (including Cyrillic З)
+  const rawLines = s
+    .replace(/(?:^|\n|\.\s+)[1-5Зз]\s*[\)\.\-–:]\s*/g, '\n')
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
 
-  if (normTarget.length >= 4) {
-    const prefix4 = normTarget.slice(0, 4);
-    const prefixMatch = segments.find((seg) => seg.toLowerCase().includes(prefix4));
-    if (prefixMatch) {
-      return cleanDisplayText(prefixMatch);
+  const candidates: string[] = [];
+  for (const line of rawLines) {
+    // Also split sentences like "Слово1 — разбор. Слово2 — разбор"
+    const sentenceParts = line
+      .split(/\.\s+(?=[А-Яа-яЁё\u0300-\u036f\-]+\s*(?:\([^)]+\)\s*)?[—–-])/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    for (const part of sentenceParts) {
+      candidates.push(...splitLineIntoWordChunks(part));
     }
   }
 
-  const dashParts = cleaned.split(/(?=[А-Яа-яЁё]+\s*—)/g);
-  if (dashParts.length > 1) {
-    const dashMatch = dashParts.find((part) => part.toLowerCase().includes(normTarget));
-    if (dashMatch) {
-      return cleanDisplayText(dashMatch);
+  if (candidates.length === 0) return '';
+
+  // Score each candidate for matching `normTarget` + having a real explanation
+  let bestCandidate = '';
+  let bestScore = -1;
+
+  const targetStem = normTarget.length >= 5 ? normTarget.slice(0, -2) : normTarget;
+
+  for (const cand of candidates) {
+    const { head, body, hasExplanation } = splitChunkHeadAndBody(cand);
+    const headWithoutParens = head.replace(/\(.*?\)/g, ' ');
+    const headWords = headWithoutParens
+      .split(/[^А-Яа-яЁё\u0300-\u036fA-Za-z]+/)
+      .map(normalizeWordForMatch)
+      .filter(Boolean);
+    const normHeadFull = normalizeWordForMatch(headWithoutParens);
+
+    let matchLevel = 0;
+    if (
+      normHeadFull === normTarget ||
+      headWords.includes(normTarget)
+    ) {
+      matchLevel = 3; // Exact head word match
+    } else if (
+      normHeadFull &&
+      (normHeadFull.includes(normTarget) || normTarget.includes(normHeadFull))
+    ) {
+      matchLevel = 2; // Head phrase contains target word (e.g. Task 13/14 sentence)
+    } else if (
+      targetStem.length >= 4 &&
+      headWords.some((hw) => hw.startsWith(targetStem) || targetStem.startsWith(hw))
+    ) {
+      matchLevel = 1; // Inflected stem match in head
+    }
+
+    if (matchLevel > 0) {
+      const explScore = hasExplanation ? 1000 + Math.min(body.length, 300) : 10;
+      const totalScore = matchLevel * 10000 + explScore;
+      if (totalScore > bestScore) {
+        bestScore = totalScore;
+        bestCandidate = cand;
+      }
     }
   }
 
-  return cleanDisplayText(segments[0]);
+  if (bestCandidate) {
+    return cleanDisplayText(bestCandidate);
+  }
+
+  // Fallback: check if any candidate mentions the target word anywhere
+  for (const cand of candidates) {
+    const { hasExplanation } = splitChunkHeadAndBody(cand);
+    if (hasExplanation && normalizeWordForMatch(cand).includes(targetStem)) {
+      return cleanDisplayText(cand);
+    }
+  }
+
+  // If there was only 1 candidate and it doesn't belong to a different word, return it
+  if (candidates.length === 1) {
+    return cleanDisplayText(candidates[0]);
+  }
+
+  return '';
 }
 
 export interface StructuredExplanation {
   targetWord?: string;
   checkWord?: string;
+  orthogramType?: string;
+  steps?: string[];
+  warningNote?: string;
   ruleNote: string;
 }
 
@@ -635,45 +875,185 @@ export function parseStructuredExplanation(
   fallbackWord?: string | null
 ): StructuredExplanation {
   const cleaned = cleanDisplayText(text);
-  if (!cleaned) {
-    return { ruleNote: '' };
-  }
+  if (!cleaned) return { ruleNote: '' };
 
   let targetWord = fallbackWord || '';
   let checkWord = '';
-  let ruleNote = cleaned;
+  let orthogramType = '';
+  let warningNote = '';
 
-  const dashMatch = cleaned.match(/^([А-Яа-яЁё]+(?:\s*\([^\)]+\))?)\s*—\s*(.+)$/s);
-  if (dashMatch) {
-    if (!targetWord) {
-      targetWord = dashMatch[1].trim();
-    }
-    ruleNote = dashMatch[2].trim();
+  const { head, body, hasExplanation } = splitChunkHeadAndBody(cleaned);
+  let ruleNote = hasExplanation ? body : cleaned;
+
+  if (head && hasExplanation && !targetWord) {
+    targetWord = head.replace(/^[,;.\s]+|[,;.\s]+$/g, '').trim();
   }
 
-  const cwMatch1 = ruleNote.match(/(?:проверочное слово|проверка)[:—\-–\s]+[«"']?([А-Яа-яЁё\u0300-\u036f]+)[»"']?/i);
-  if (cwMatch1) {
+  // Filter out bare word lists or tautological placeholders like "В слове «X» пишется буква «Y»"
+  const isTautology =
+    /^в слове\s+[«"']?[а-яё\u0300-\u036f\-]+[»"']?\s+пишется\s+(?:безударная\s+)?(?:гласная\s+|буква\s+)?[«"']?[а-яё]+[»"']?\.?$/i.test(
+      ruleNote.trim()
+    );
+  const looksLikeBareWordList =
+    !hasExplanation &&
+    !/(?:пишется|пишем|корень|корн|приставк|суффикс|окончан|спряжен|проверочн|словарн|исключен|глагол|причаст|прилагат|наречи|предлог|союз|частиц|слитно|раздельно|дефис)/i.test(
+      ruleNote
+    );
+
+  if (isTautology || looksLikeBareWordList) {
+    return {
+      targetWord: targetWord || undefined,
+      ruleNote: '',
+      steps: [],
+    };
+  }
+
+  // Clean verbose filler intros
+  ruleNote = ruleNote
+    .replace(
+      /^корень изменился,\s*но\s+[А-ЯЁа-яё]\s+продолжает писаться по правилу чередования корней/i,
+      'Чередование корней'
+    )
+    .replace(/;\s*вопрос о статусе корня[^;.)]*/gi, '')
+    .replace(/можно запомнить таким образом:\s*/gi, '');
+
+  // Extract nested `(исключения: ...)` or `(не путать с ...)` into `warningNote`
+  const warningMatches: string[] = [];
+  ruleNote = ruleNote.replace(
+    /\(\s*((?:исключени[ея]|не путать|не путайте|примечание|внимание)[^()]*)\)/gi,
+    (_m, inner) => {
+      warningMatches.push(inner.trim());
+      return '';
+    }
+  );
+  ruleNote = ruleNote.replace(
+    /;\s*((?:не путать|не путайте|внимание\s*:)[^;]+)$/i,
+    (_m, inner) => {
+      warningMatches.push(inner.trim());
+      return '';
+    }
+  );
+  if (warningMatches.length > 0) {
+    const rawWarn = warningMatches.join('. ').replace(/[,;.\s]+$/, '');
+    warningNote = rawWarn.charAt(0).toUpperCase() + rawWarn.slice(1) + '.';
+  }
+
+  const isGrammarTerm = (w: string) =>
+    /^(?:словарное|запомнить|исключение|сущ|существительное|прил|прилагательное|глаг|глагол|нареч|наречие|местоим|местоимение|прич|причастие|дееприч|деепричастие|предлог|союз|частица|числительное|междометие|категория|корень|суффикс|приставка|окончание|инфинитив|оканчивающееся|оканчивающийся|образованное|образованный|совершенного|несовершенного|переходный|непереходный|возвратный|страдательное|действительное|краткое|полное|вводное|производный|сочинительный|подчинительный)$/i.test(
+      w.trim()
+    );
+
+  // Extract checkWord (проверочное слово / инфинитив)
+  const cwMatch1 = ruleNote.match(
+    /(?:проверочное слово|проверка|проверяется словом|где гласная стоит под ударением)[:—\-–\s]+[«"']?([А-Яа-яЁё\u0300-\u036f]+)[»"']?/i
+  );
+  if (cwMatch1 && !isGrammarTerm(cwMatch1[1])) {
     checkWord = cwMatch1[1];
   } else {
-    const parenMatch = ruleNote.match(/\(([А-Яа-яЁё\u0300-\u036f]+)\)/);
-    if (parenMatch && !/^(?:словарное|исключение|сущ|прил|глаг|нареч|местоим)/i.test(parenMatch[1])) {
-      checkWord = parenMatch[1];
+    const cwMatch2 = ruleNote.match(
+      /проверяемая\s+[А-Яа-яЁё]+\s*\(([А-Яа-яЁё\u0300-\u036f]+)\)/i
+    );
+    if (cwMatch2 && !isGrammarTerm(cwMatch2[1])) {
+      checkWord = cwMatch2[1];
       ruleNote = ruleNote.replace(`(${checkWord})`, '').trim();
+    } else {
+      const infMatch = ruleNote.match(
+        /(?:инфинитив|образовано от глагола)\s*[—–\-:]?\s*[«"']([А-Яа-яЁё\u0300-\u036f]+)[»"']/i
+      );
+      if (infMatch && !isGrammarTerm(infMatch[1])) {
+        checkWord = infMatch[1];
+      } else if (/^[А-Яа-яЁё\u0300-\u036f]+$/.test(ruleNote.trim())) {
+        const single = ruleNote.trim();
+        if (/^(?:словарное|запомнить)$/i.test(single)) {
+          ruleNote = 'Непроверяемая гласная в корне (словарное слово, написание нужно запомнить).';
+        } else if (!isGrammarTerm(single)) {
+          checkWord = single;
+          ruleNote = `Безударная гласная в корне проверяется ударением (проверочное слово — «${single}»).`;
+        }
+      } else {
+        const parenMatch = ruleNote.match(/\(([А-Яа-яЁё\u0300-\u036f]+)\)/);
+        if (
+          parenMatch &&
+          !isGrammarTerm(parenMatch[1]) &&
+          parenMatch[1].length >= 3
+        ) {
+          checkWord = parenMatch[1];
+          ruleNote = ruleNote.replace(`(${checkWord})`, '').trim();
+        }
+      }
     }
   }
 
-  ruleNote = ruleNote.replace(/[,;.\s]+$/, '').trim();
-  if (ruleNote && !ruleNote.endsWith('.')) {
-    ruleNote += '.';
+  // Expand shorthand notes like "словарное слово; запомнить"
+  if (/^словарное(?:\s+слово)?(?:\s*[;,]\s*запомнить)?\.?$/i.test(ruleNote.trim())) {
+    ruleNote = 'В корне пишется непроверяемая гласная (словарное слово, написание нужно запомнить).';
+    orthogramType = 'Словарное слово';
   }
 
-  if (ruleNote.length > 0) {
-    ruleNote = ruleNote.charAt(0).toUpperCase() + ruleNote.slice(1);
+  // Identify orthogramType badge if not yet set
+  if (!orthogramType) {
+    const chgMatch = ruleNote.match(/чередовани[ея]\s+(?:корней\s+|в корне\s+)?([А-Яа-яЁё\-\/()\s]+?)(?=[:;,.]|$)/i);
+    if (chgMatch) {
+      orthogramType = `Чередование ${chgMatch[1].trim()}`;
+    } else if (/непроверяемая|словарное/i.test(ruleNote)) {
+      orthogramType = 'Словарное слово (непроверяемая гласная)';
+    } else if (/проверяемая|проверочное слово/i.test(ruleNote) || checkWord) {
+      orthogramType = 'Проверяемая гласная в корне';
+    } else if (/приставк/i.test(ruleNote)) {
+      orthogramType = 'Правописание приставки';
+    } else if (/спряжен/i.test(ruleNote)) {
+      orthogramType = 'Личное окончание / суффикс причастия';
+    } else if (/суффикс/i.test(ruleNote)) {
+      orthogramType = 'Правописание суффикса';
+    } else if (/слитно|раздельно|дефис/i.test(ruleNote)) {
+      orthogramType = 'Слитное, раздельное или дефисное написание';
+    }
   }
+
+  // Split ruleNote into sequential, easy-to-read steps
+  const rawSteps: string[] = [];
+  let stepBuf = '';
+  let pDepth = 0;
+  for (let i = 0; i < ruleNote.length; i++) {
+    const ch = ruleNote[i];
+    if (ch === '(') pDepth++;
+    else if (ch === ')') pDepth = Math.max(0, pDepth - 1);
+
+    if (pDepth === 0 && (ch === ';' || ch === '→')) {
+      if (stepBuf.trim()) rawSteps.push(stepBuf.trim());
+      stepBuf = '';
+      continue;
+    }
+    if (
+      pDepth === 0 &&
+      ch === ':' &&
+      /^(?:чередование|по правилу чередования)/i.test(stepBuf.trim())
+    ) {
+      if (stepBuf.trim()) rawSteps.push(stepBuf.trim());
+      stepBuf = '';
+      continue;
+    }
+    stepBuf += ch;
+  }
+  if (stepBuf.trim()) rawSteps.push(stepBuf.trim());
+
+  const steps = rawSteps
+    .map((st) => {
+      let cleanSt = st.replace(/^[,;.\s—–-]+|[,;.\s]+$/g, '').trim();
+      if (!cleanSt) return '';
+      if (!cleanSt.endsWith('.')) cleanSt += '.';
+      return cleanSt.charAt(0).toUpperCase() + cleanSt.slice(1);
+    })
+    .filter(Boolean);
+
+  ruleNote = steps.join(' ');
 
   return {
     targetWord: targetWord || undefined,
     checkWord: checkWord || undefined,
+    orthogramType: orthogramType || undefined,
+    steps,
+    warningNote: warningNote || undefined,
     ruleNote,
   };
 }
@@ -718,12 +1098,26 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
   staggerIndex = 0,
   forceCollapsed,
 }) => {
-  const isolatedExpl = isolateTargetWordExplanation(explanation, wordTitle);
-  const cleanExpl = cleanDisplayText(isolatedExpl);
-  const cleanRuleText = cleanDisplayText(rule || '');
-  const isFipi5Row = question?.kind === 'fipi' || cleanExpl.includes('Строка ') || cleanExpl.includes(';');
-  const formula = splitFormulaSteps(cleanExpl);
-  const shortRule = cleanRuleText ? cleanRuleText.split('.')[0] + '.' : TASK_META[task].subtitle;
+  const isFipi5Row =
+    question?.kind === 'fipi' ||
+    wordTitle.startsWith('Задание №') ||
+    explanation.includes('Строка ');
+  const cleanExpl = isFipi5Row
+    ? cleanDisplayText(explanation)
+    : cleanDisplayText(isolateTargetWordExplanation(explanation, wordTitle));
+  const parsedCardExpl = useMemo(
+    () => (isFipi5Row ? null : parseStructuredExplanation(cleanExpl, wordTitle)),
+    [isFipi5Row, cleanExpl, wordTitle]
+  );
+  const isolatedRule = isFipi5Row
+    ? cleanDisplayText(rule || '')
+    : cleanDisplayText(isolateTargetWordExplanation(rule || '', wordTitle));
+  const formula = splitFormulaSteps(parsedCardExpl?.ruleNote || cleanExpl);
+  const shortRule =
+    parsedCardExpl?.orthogramType ||
+    (isolatedRule && !isolatedRule.startsWith('Укажите варианты')
+      ? isolatedRule.split('.')[0] + '.'
+      : TASK_META[task].subtitle);
   
   // Synchronous override state - guarantees zero frame lag when forceCollapsed changes
   const [userOverride, setUserOverride] = useState<boolean | null>(null);
@@ -751,16 +1145,16 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
       style={{ animationDelay: `${Math.min(staggerIndex * 35, 180)}ms` }}
     >
       {/* Top Row: Task Badge + Topic + Collapse Toggle + Structured "Правило ?" Trigger */}
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-start gap-1.5 min-w-0 flex-1">
           <span
-            className="w-5 h-5 rounded-md text-[11px] font-extrabold flex items-center justify-center text-white shrink-0"
+            className="w-5 h-5 rounded-md text-[11px] font-extrabold flex items-center justify-center text-white shrink-0 mt-0.5"
             style={{ background: TASK_META[task].gradient }}
           >
             {task}
           </span>
           <span
-            className="text-[11.5px] font-extrabold truncate"
+            className="text-[11.5px] font-extrabold leading-snug break-words"
             style={{ color: 'var(--ios-blue)' }}
           >
             {topic}
@@ -806,22 +1200,22 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
         </div>
       </div>
 
-      {/* Middle Row: Word / Task Title + User vs Correct Answer Pills */}
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-extrabold leading-tight truncate">
+      {/* Middle Row: Word / Task Title + User vs Correct Answer Pills (wraps cleanly on mobile) */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-1.5">
+        <div className="min-w-0 flex-1 basis-[160px]">
+          <div className="text-[15px] font-extrabold leading-snug break-words">
             {isFipi5Row ? `Задание № ${task} (5 строк)` : wordTitle}
           </div>
           {context && !isFipi5Row && (
             <div
-              className="text-[11.5px] font-medium truncate mt-0.5"
+              className="text-[11.5px] font-medium leading-snug break-words mt-0.5"
               style={{ color: 'var(--ios-label-sec)' }}
             >
               {context}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span
             className="px-2 py-0.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap"
             style={{
@@ -920,30 +1314,41 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
-                  {/* Structured 2-part Word Formula Bar */}
+                  {parsedCardExpl?.checkWord && (
+                    <div
+                      className="px-2.5 py-1.5 rounded-xl text-[11.5px] font-extrabold flex items-center gap-1.5"
+                      style={{
+                        background: 'var(--ios-green-soft)',
+                        color: 'var(--ios-green)',
+                      }}
+                    >
+                      <span>🔍 Проверочное слово:</span>
+                      <span className="font-black underline decoration-2 underline-offset-2">
+                        {parsedCardExpl.checkWord}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Clean Sequential Word Explanation Bar */}
                   <div
-                    className="p-2 rounded-xl flex items-center justify-between gap-2"
+                    className="p-2 rounded-xl flex items-start justify-between gap-2"
                     style={{ background: 'var(--ios-bg-secondary)' }}
                   >
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1 text-[11.5px] font-bold">
+                    <div className="flex items-start gap-1.5 min-w-0 flex-1 text-[11.5px] font-semibold leading-snug">
                       <span
-                        className="px-2 py-0.5 rounded-md text-[10.5px] font-extrabold shrink-0"
+                        className="px-2 py-0.5 rounded-md text-[10px] font-extrabold shrink-0 mt-0.5"
                         style={{
                           background: 'var(--ios-blue-soft)',
                           color: 'var(--ios-blue)',
                         }}
                       >
-                        Формула
-                      </span>
-                      <span className="truncate font-extrabold">{formula.head}</span>
-                      <span style={{ color: 'var(--ios-blue)' }} className="shrink-0 font-extrabold">
-                        →
+                        Разбор
                       </span>
                       <span
-                        className="truncate font-bold"
+                        className="line-clamp-2 font-semibold"
                         style={{ color: 'var(--ios-label)' }}
                       >
-                        {formula.tail}
+                        {parsedCardExpl?.ruleNote || formula.tail || shortRule}
                       </span>
                     </div>
                   </div>
@@ -960,7 +1365,7 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
                       className="font-extrabold shrink-0"
                       style={{ color: 'var(--ios-purple)' }}
                     >
-                      Правило:
+                      Орфограмма:
                     </span>
                     <span className="truncate">{shortRule}</span>
                   </div>
@@ -1006,7 +1411,6 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
   const activeQuestion = question || cachedDataRef.current.question;
   const activeError = errorEntry || cachedDataRef.current.errorEntry;
 
-  if (!activeQuestion && !activeError) return null;
   const task = (activeError?.task || activeQuestion?.task || '9') as TaskId;
   const meta = TASK_META[task];
   const topic = activeError?.topic || activeQuestion?.topic || 'Орфография';
@@ -1022,8 +1426,9 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
       : activeQuestion?.correctIndices?.join(''));
 
   const solvedWordPreview =
-    activeError?.correctWord ||
-    (activeQuestion?.kind === 'sprint'
+    activeError?.correctWord && !activeError.correctWord.startsWith('Задание №')
+      ? activeError.correctWord
+      : activeQuestion?.kind === 'sprint'
       ? activeQuestion.task === '13'
         ? `${activeQuestion.prefix.replace(/[()]/g, '')}${
             activeQuestion.answer === 'СЛИТНО' ? '' : ' '
@@ -1035,7 +1440,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
             activeQuestion.answer
           )
         : `${activeQuestion.prefix}${activeQuestion.answer.toLowerCase()}${activeQuestion.suffix}`
-      : null);
+      : null;
 
   const rawExplanation = cleanDisplayText(
     isolateTargetWordExplanation(
@@ -1045,12 +1450,9 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
       solvedWordPreview
     )
   );
-
   const parsedExplanation = useMemo(() => {
     return parseStructuredExplanation(rawExplanation, solvedWordPreview);
   }, [rawExplanation, solvedWordPreview]);
-
-  const ruleText = cleanDisplayText(activeError?.rule || activeQuestion?.rule || '');
 
   const contextText =
     activeError?.context ||
@@ -1067,11 +1469,12 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
         contextText
       );
     }
-    if (activeError && activeError.correctWord) {
+    if (activeError && activeError.correctWord && !activeError.correctWord.startsWith('Задание №')) {
+      const parts = (activeError.wordDisplay || '').split('..');
       return classifyWordSubtopicAndException(
         task,
-        activeError.prefix || '',
-        activeError.suffix || '',
+        parts[0] || '',
+        parts[1] || '',
         activeError.correctChoice || '',
         rawExplanation,
         contextText
@@ -1080,8 +1483,89 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
     return null;
   }, [activeQuestion, activeError, task, rawExplanation, contextText]);
 
+  // Build structured per-word breakdowns for all 5 rows when inspecting a FIPI 5-row task
+  const fipiRowsBreakdown = useMemo(() => {
+    if (!activeQuestion || activeQuestion.kind !== 'fipi') return null;
+    return activeQuestion.rows.map((r, rIdx) => {
+      const wordBreakdowns = r.solvedWords.map((solvedW, wIdx) => {
+        const rawGapW = r.words[wIdx] || '';
+        const isolated = isolateTargetWordExplanation(r.explanation || '', solvedW);
+        const parsed = parseStructuredExplanation(isolated, solvedW);
+
+        // Fallback to wordClassifier if the row explanation in the bank was just a bare list of words
+        let fallbackRule = '';
+        let fallbackTopic = '';
+        if (!parsed.ruleNote && !parsed.checkWord) {
+          const gapParts = rawGapW.replace(/\(.*?\)/g, '').trim().split('..');
+          const prefix = gapParts[0] || '';
+          const suffix = gapParts[1] || '';
+          const letterMatch = solvedW.replace(/\(.*?\)/g, '').match(/[А-ЯЁ]+/);
+          const ansLetter = letterMatch ? letterMatch[0] : r.letter !== '—' ? r.letter : '';
+          const classified = classifyWordSubtopicAndException(
+            task,
+            prefix,
+            suffix,
+            ansLetter,
+            '',
+            ''
+          );
+          fallbackRule = classified.rule;
+          fallbackTopic = classified.topic;
+        }
+
+        return {
+          word: solvedW,
+          checkWord: parsed.checkWord,
+          orthogramType: parsed.orthogramType || fallbackTopic,
+          steps:
+            parsed.steps && parsed.steps.length > 0
+              ? parsed.steps
+              : fallbackRule
+              ? [fallbackRule]
+              : [],
+          warningNote: parsed.warningNote,
+          ruleNote: parsed.ruleNote || fallbackRule,
+        };
+      });
+
+      return {
+        rowNum: rIdx + 1,
+        isCorrectRow: r.isCorrectRow,
+        letter: r.letter,
+        solvedWords: r.solvedWords,
+        wordBreakdowns,
+      };
+    });
+  }, [activeQuestion, task]);
+
+  if (!activeQuestion && !activeError) return null;
+
   const displayTopic = liveMeta?.topic || topic;
-  const displayRule = ruleText || (liveMeta?.rule ? cleanDisplayText(liveMeta.rule) : '');
+
+  // Prefer the clean classifier rule for the general rule box; never show raw multi-word dumps or exam instructions
+  const rawRuleCandidate = liveMeta?.rule
+    ? cleanDisplayText(liveMeta.rule)
+    : solvedWordPreview
+    ? cleanDisplayText(
+        isolateTargetWordExplanation(
+          activeError?.rule || activeQuestion?.rule || '',
+          solvedWordPreview
+        )
+      )
+    : '';
+  const displayRule =
+    rawRuleCandidate &&
+    !rawRuleCandidate.startsWith('Укажите варианты') &&
+    rawRuleCandidate !== parsedExplanation.ruleNote
+      ? rawRuleCandidate
+      : '';
+
+  const wordSteps =
+    parsedExplanation.steps && parsedExplanation.steps.length > 0
+      ? parsedExplanation.steps
+      : displayRule
+      ? [displayRule]
+      : [];
 
   return (
     <SwipeableSheet
@@ -1093,20 +1577,20 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
       handleAriaLabel="Потяните вниз, чтобы закрыть разбор правила"
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+      <div className="flex items-start justify-between gap-2 mb-2.5">
+        <div className="flex items-start gap-2.5 min-w-0 flex-1 pr-1">
           <div
-            className="ios-row-icon !w-9 !h-9 !rounded-xl !m-0 shrink-0"
+            className="ios-row-icon !w-9 !h-9 !rounded-xl !m-0 shrink-0 mt-0.5"
             style={{ background: meta.gradient }}
           >
             {task}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-[17px] font-extrabold tracking-tight leading-tight whitespace-nowrap truncate">
+            <h3 className="text-[16px] sm:text-[17px] font-extrabold tracking-tight leading-snug break-words">
               Задание {task} · Полный разбор
             </h3>
             <span
-              className="block text-[11.5px] truncate whitespace-nowrap mt-0.5 font-bold"
+              className="block text-[11.5px] leading-snug break-words mt-0.5 font-bold"
               style={{ color: 'var(--ios-blue)' }}
             >
               {displayTopic}
@@ -1126,44 +1610,46 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
       <div className="cheat-reader flex-1 mb-2">
         {/* 1. Main Word Breakdown Card */}
         <div className="ios-inset-group p-3.5 !mb-2.5 ios-stagger-card">
-          <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="flex flex-col gap-1.5 mb-2">
             <span
               className="text-[10px] font-extrabold uppercase tracking-wider"
               style={{ color: 'var(--ios-blue)' }}
             >
-              Слово из задания
+              {solvedWordPreview ? 'Слово из задания' : 'Разбор задания ФИПИ'}
             </span>
-            <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-              {userChoice && (
-                <span
-                  className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold whitespace-nowrap"
-                  style={{
-                    background: 'var(--ios-red-soft)',
-                    color: 'var(--ios-red)',
-                  }}
-                >
-                  Вы ответили: {userChoice}
-                </span>
-              )}
-              {correctChoice && (
-                <span
-                  className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold whitespace-nowrap"
-                  style={{
-                    background: 'var(--ios-green-soft)',
-                    color: 'var(--ios-green)',
-                  }}
-                >
-                  Верно: {correctChoice}
-                </span>
-              )}
-            </div>
+            {(userChoice || correctChoice) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {userChoice && (
+                  <span
+                    className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold leading-snug break-words"
+                    style={{
+                      background: 'var(--ios-red-soft)',
+                      color: 'var(--ios-red)',
+                    }}
+                  >
+                    Вы ответили: {userChoice}
+                  </span>
+                )}
+                {correctChoice && (
+                  <span
+                    className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold leading-snug break-words"
+                    style={{
+                      background: 'var(--ios-green-soft)',
+                      color: 'var(--ios-green)',
+                    }}
+                  >
+                    Верно: {correctChoice}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div
-            className="text-[20px] sm:text-[23px] font-black leading-tight tracking-tight mb-1"
+            className="text-[20px] sm:text-[23px] font-black leading-tight tracking-tight mb-1 break-words"
             style={{ color: 'var(--ios-label)' }}
           >
-            {solvedWordPreview || `Задание № ${task}`}
+            {solvedWordPreview || `Задание № ${task} (5 строк)`}
           </div>
 
           {contextText && (
@@ -1175,24 +1661,33 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
             </div>
           )}
 
-          {/* Full Explanation Box */}
-          {/* Structured Explanation Box */}
-          {(parsedExplanation.ruleNote || parsedExplanation.checkWord) && (
+          {/* Sequential Step-by-Step Word Explanation Box */}
+          {(wordSteps.length > 0 || parsedExplanation.checkWord) && (
             <div
-              className="p-3.5 rounded-2xl flex flex-col gap-2 mt-2 border border-[var(--ios-separator)]/60"
+              className="p-3.5 rounded-2xl flex flex-col gap-2.5 mt-2 border border-[var(--ios-separator)]/60"
               style={{ background: 'var(--ios-bg-secondary)' }}
             >
-              <div
-                className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide"
-                style={{ color: 'var(--ios-blue)' }}
-              >
-                <svg className="w-3.5 h-3.5 shrink-0">
-                  <use href="#sf-sparkles" />
-                </svg>
-                <span>Разбор орфограммы:</span>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div
+                  className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide"
+                  style={{ color: 'var(--ios-blue)' }}
+                >
+                  <svg className="w-3.5 h-3.5 shrink-0"><use href="#sf-sparkles" /></svg>
+                  <span>Пошаговый разбор слова:</span>
+                </div>
+                {(parsedExplanation.orthogramType || displayTopic) && (
+                  <span
+                    className="px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold leading-snug break-words"
+                    style={{
+                      background: 'var(--ios-blue-soft)',
+                      color: 'var(--ios-blue)',
+                    }}
+                  >
+                    {parsedExplanation.orthogramType || displayTopic}
+                  </span>
+                )}
               </div>
 
-              {/* Check Word & Transformation Badge */}
               {parsedExplanation.checkWord && (
                 <div className="flex items-center gap-2">
                   <div
@@ -1202,7 +1697,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
                       color: 'var(--ios-green)',
                     }}
                   >
-                    <span>🔍 Проверка:</span>
+                    <span>🔍 Проверочное / исходное слово:</span>
                     <span className="font-black underline decoration-2 underline-offset-2">
                       {parsedExplanation.checkWord}
                     </span>
@@ -1210,20 +1705,48 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
                 </div>
               )}
 
-              {/* Rule explanation note */}
-              {parsedExplanation.ruleNote && (
+              {wordSteps.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  {wordSteps.map((stepText, sIdx) => (
+                    <div
+                      key={sIdx}
+                      className="flex items-start gap-2 text-[13px] sm:text-[13.5px] font-medium leading-relaxed break-words"
+                      style={{ color: 'var(--ios-label)' }}
+                    >
+                      {wordSteps.length > 1 && (
+                        <span
+                          className="w-5 h-5 rounded-full text-[11px] font-extrabold flex items-center justify-center shrink-0 mt-0.5"
+                          style={{
+                            background: 'var(--ios-blue-soft)',
+                            color: 'var(--ios-blue)',
+                          }}
+                        >
+                          {sIdx + 1}
+                        </span>
+                      )}
+                      <span className="flex-1">{stepText}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {parsedExplanation.warningNote && (
                 <div
-                  className="text-[13px] sm:text-[13.5px] font-medium leading-relaxed break-words"
-                  style={{ color: 'var(--ios-label)' }}
+                  className="p-2.5 rounded-xl text-[12px] font-semibold leading-snug flex items-start gap-1.5"
+                  style={{
+                    background: 'var(--ios-orange-soft)',
+                    color: 'var(--ios-orange)',
+                  }}
                 >
-                  {parsedExplanation.ruleNote}
+                  <span className="shrink-0 font-extrabold">⚠️ Важно:</span>
+                  <span>{parsedExplanation.warningNote}</span>
                 </div>
               )}
             </div>
           )}
 
-          {/* Full Rule Box */}
-          {displayRule && (
+          {/* Full Rule Box (shown only if it adds general rule context beyond wordSteps) */}
+          {displayRule && wordSteps[0] !== displayRule && (
             <div
               className="p-3 rounded-2xl flex flex-col gap-1.5 mt-2 border border-[var(--ios-separator)]/60"
               style={{ background: 'var(--ios-bg-secondary)' }}
@@ -1247,50 +1770,114 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
           )}
         </div>
 
-        {/* 2. FIPI 5-row breakdown if applicable */}
-        {activeQuestion && activeQuestion.kind === 'fipi' && (
+        {/* 2. FIPI 5-row per-word breakdown if applicable */}
+        {fipiRowsBreakdown && (
           <div className="ios-inset-group p-3 !mb-2.5 ios-stagger-card">
-            <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="flex items-center justify-between gap-2 mb-2">
               <span
                 className="text-[10px] font-extrabold uppercase tracking-wider"
                 style={{ color: 'var(--ios-blue)' }}
               >
-                Построчный разбор задания
+                Разбор каждого слова по строкам
               </span>
-              <span
-                className="px-2.5 py-0.5 rounded-full text-[11.5px] font-extrabold shrink-0"
-                style={{
-                  background: 'var(--ios-green-soft)',
-                  color: 'var(--ios-green)',
-                }}
-              >
-                Ответ: {activeQuestion.correctIndices.join('')}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              {activeQuestion.rows.map((r, rIdx) => (
-                <div
-                  key={rIdx}
-                  className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-[11.5px]"
+              {activeQuestion && activeQuestion.kind === 'fipi' && (
+                <span
+                  className="px-2.5 py-0.5 rounded-full text-[11.5px] font-extrabold shrink-0"
                   style={{
-                    background: r.isCorrectRow
+                    background: 'var(--ios-green-soft)',
+                    color: 'var(--ios-green)',
+                  }}
+                >
+                  Ответ: {activeQuestion.correctIndices.join('')}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              {fipiRowsBreakdown.map((row) => (
+                <div
+                  key={row.rowNum}
+                  className="p-2.5 rounded-2xl border border-[var(--ios-separator)]/50 flex flex-col gap-2"
+                  style={{
+                    background: row.isCorrectRow
                       ? 'var(--ios-green-soft)'
                       : 'var(--ios-bg-secondary)',
                   }}
                 >
-                  <span className="font-bold truncate">
-                    <strong>{rIdx + 1})</strong> {r.solvedWords.join(', ')}
-                  </span>
-                  <span
-                    className="text-[10.5px] font-extrabold shrink-0 whitespace-nowrap"
-                    style={{
-                      color: r.isCorrectRow
-                        ? 'var(--ios-green)'
-                        : 'var(--ios-label-sec)',
-                    }}
-                  >
-                    {r.isCorrectRow ? `Буква ${r.letter}` : 'Разные'}
-                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[12px] font-extrabold">
+                      Строка {row.rowNum}
+                    </span>
+                    <span
+                      className="text-[10.5px] font-extrabold px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap"
+                      style={{
+                        background: row.isCorrectRow
+                          ? 'var(--ios-green)'
+                          : 'var(--ios-bg-tertiary)',
+                        color: row.isCorrectRow ? '#FFFFFF' : 'var(--ios-label-sec)',
+                      }}
+                    >
+                      {row.isCorrectRow ? `Подходит · Буква ${row.letter}` : 'Разные буквы'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    {row.wordBreakdowns.map((wb, wIdx) => (
+                      <div
+                        key={wIdx}
+                        className="p-2.5 rounded-xl flex flex-col gap-1"
+                        style={{ background: 'var(--ios-bg-cell-hover)' }}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span
+                            className="text-[13px] font-black"
+                            style={{ color: 'var(--ios-label)' }}
+                          >
+                            {wb.word}
+                          </span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {wb.checkWord && (
+                              <span
+                                className="px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold"
+                                style={{
+                                  background: 'var(--ios-green-soft)',
+                                  color: 'var(--ios-green)',
+                                }}
+                              >
+                                🔍 {wb.checkWord}
+                              </span>
+                            )}
+                            {wb.orthogramType && (
+                              <span
+                                className="px-2 py-0.5 rounded-lg text-[10px] font-bold"
+                                style={{
+                                  background: 'var(--ios-blue-soft)',
+                                  color: 'var(--ios-blue)',
+                                }}
+                              >
+                                {wb.orthogramType}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {wb.ruleNote && (
+                          <div
+                            className="text-[12px] font-medium leading-snug"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            {wb.ruleNote}
+                          </div>
+                        )}
+                        {wb.warningNote && (
+                          <div
+                            className="text-[11px] font-semibold leading-snug"
+                            style={{ color: 'var(--ios-orange)' }}
+                          >
+                            ⚠️ {wb.warningNote}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1535,11 +2122,11 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
     const key = item.id || (displayWord + '_' + item.task + '_' + cleanContext).toLowerCase().trim();
     if (!map.has(key)) {
       map.set(key, {
-        task: item.task,
+        task: item.task as TaskId,
         word: fullLabel,
         highlight: item.missingLetter || (item as any).letter || '—',
-        category: item.category || (item as any).topic || TASK_META[item.task]?.title || `Задание № ${item.task}`,
-        note: cleanDisplayText(item.rule || (item as any).explanation || ''),
+        category: item.category || (item as any).topic || TASK_META[item.task as TaskId]?.title || `Задание № ${item.task}`,
+        note: cleanDisplayText(isolateTargetWordExplanation(item.rule || (item as any).explanation || '', displayWord)),
         source: item.source || 'ФИПИ 2026–2027',
       });
     }
@@ -1560,7 +2147,7 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
           word: fullLabel,
           highlight: sq.answer || '—',
           category: sq.topic || TASK_META[sq.task]?.title || `Задание № ${sq.task}`,
-          note: cleanDisplayText(sq.rule || sq.explanation || ''),
+          note: cleanDisplayText(isolateTargetWordExplanation(sq.rule || sq.explanation || '', fullWord)),
           source: sq.source || 'Банк ФИПИ / Школково',
         });
       }
@@ -1584,7 +2171,7 @@ const buildFullDatabaseEntries = (): DictEntry[] => {
             word: fullLabel,
             highlight: sq.answer || '—',
             category: sq.topic || TASK_META[sq.task]?.title || `Задание № ${sq.task}`,
-            note: cleanDisplayText(sq.rule || sq.explanation || ''),
+            note: cleanDisplayText(isolateTargetWordExplanation(sq.rule || sq.explanation || '', fullWord)),
             source: sq.source || 'Банк заданий ФИПИ 2026–2027',
           });
         }

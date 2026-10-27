@@ -275,13 +275,13 @@ export function determineSprintOptions(
   }
 
   if (task === '9') {
-    if (origUpper === 'А' || origUpper === 'О') return ['А', 'О'];
-    if (origUpper === 'И' || origUpper === 'Е') return ['И', 'Е'];
-    if (origUpper === 'У' || origUpper === 'Ю') return ['У', 'Ю'];
-    if (origUpper === 'Я' || origUpper === 'Е') return ['Я', 'Е'];
-    if (origUpper === 'Ы' || origUpper === 'И') return ['Ы', 'И'];
-    if (origUpper === 'Ё' || origUpper === 'О') return ['Ё', 'О'];
-    return ['А', 'О'];
+    if (origUpper === 'Е' || origUpper === 'И') return ['Е', 'И'];
+    if (origUpper === 'О' || origUpper === 'А') return ['О', 'А'];
+    if (origUpper === 'Ы') return ['Ы', 'И'];
+    if (origUpper === 'Э') return ['Э', 'Е'];
+    if (origUpper === 'Ю' || origUpper === 'У') return ['Ю', 'У'];
+    if (origUpper === 'Я') return ['Я', 'Е'];
+    return ['О', 'А'];
   }
 
   return ['А', 'О'];

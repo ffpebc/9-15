@@ -4,7 +4,10 @@ import {
   encodeBackupCode,
   decodeBackupCode,
 } from './trainerLogic';
-import { cleanDisplayText, isolateTargetWordExplanation } from '../components/WorkWindows';
+import {
+  cleanDisplayText,
+  isolateTargetWordExplanation,
+} from '../components/WorkWindows';
 
 const STORAGE_KEY = 'ege_trainer_ios27_v3';
 const IDB_NAME = 'ege_trainer_ios27_db';
@@ -13,18 +16,18 @@ const DEFAULT_HOSTED_PIN = 'HOSTED_DEFAULT';
 
 export function sanitizeLoadedState(state: TrainerState): TrainerState {
   if (!state || !Array.isArray(state.errorBank)) return state;
-  const sanitizedErrors = state.errorBank.map((err) => {
-    const wordKey = err.correctWord || err.wordDisplay;
-    const isolated = isolateTargetWordExplanation(err.explanation, wordKey);
-    return {
-      ...err,
-      explanation: cleanDisplayText(isolated),
-      rule: cleanDisplayText(err.rule || ''),
-    };
-  });
   return {
     ...state,
-    errorBank: sanitizedErrors,
+    errorBank: state.errorBank.map((entry) => ({
+      ...entry,
+      explanation: cleanDisplayText(
+        isolateTargetWordExplanation(
+          entry.explanation || '',
+          entry.correctWord || entry.wordDisplay
+        )
+      ),
+      rule: cleanDisplayText(entry.rule || ''),
+    })),
   };
 }
 

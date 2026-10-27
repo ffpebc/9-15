@@ -89,6 +89,8 @@ export function refreshMaps() {
   }
 }
 
+refreshMaps();
+
 // Очищаем устаревший кэш с урезанной или поврежденной базой
 if (typeof window !== 'undefined' && 'caches' in window) {
   try {
@@ -100,11 +102,14 @@ if (typeof window !== 'undefined' && 'caches' in window) {
     window.caches.delete('ege-bank-cache-v6');
     window.caches.delete('ege-bank-cache-v7');
     window.caches.delete('ege-bank-cache-v8');
+    window.caches.delete('ege-bank-cache-v9');
+    window.caches.delete('ege-bank-cache-v10');
+    window.caches.delete('ege-bank-cache-v11');
   } catch {}
 }
 
 async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<any> {
-  const cacheName = 'ege-bank-cache-v9';
+  const cacheName = 'ege-bank-cache-v12';
   let cache: Cache | null = null;
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {
@@ -113,14 +118,14 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
       if (cached) {
         const cachedData = await cached.json();
         const count = Array.isArray(cachedData) ? cachedData.length : cachedData?.words?.length || 0;
-        if (count >= 15000 || (url.includes('fipiTasks') && count >= 2000) || (url.includes('sprint') && count >= 10000)) {
+        if (count >= 10000 || (url.includes('fipiTasks') && count >= 2000) || (url.includes('sprint') && count >= 10000)) {
           return cachedData;
         }
       }
     } catch {}
   }
 
-  // 1. Быстрый CDN jsDelivr с глобальным edge-кэшированием
+  // 1. Локальная очищенная и проверенная база (/data/*.json)
   try {
     const res = await fetch(url);
     if (res.ok) {
@@ -133,10 +138,10 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
       return data;
     }
   } catch (err) {
-    console.warn(`[EGE Bank] CDN fetch error, falling back:`, err);
+    console.warn(`[EGE Bank] Local fetch error, falling back:`, err);
   }
 
-  // 2. Fallback на GitHub Raw
+  // 2. Fallback
   if (fallbackUrl) {
     try {
       const res = await fetch(fallbackUrl);
@@ -165,34 +170,33 @@ export async function loadFullDataBank(): Promise<boolean> {
   isFullBankLoading = true;
 
   try {
-    const cdnBase = 'https://cdn.jsdelivr.net/gh/ffpebc/9-15@data/src/data';
-    const rawBase = 'https://raw.githubusercontent.com/ffpebc/9-15/data/src/data';
-
-    const vParam = '?v=9';
+    const localBase = '/data';
+    const cdnBase = 'https://cdn.jsdelivr.net/gh/ffpebc/9-15@data/public/data';
+    const vParam = '?v=12';
     const [allWordsData, fipiData, sprintData] = await Promise.all([
-      fetchJsonWithCache(`${cdnBase}/allWordsBank9_15.json${vParam}`, `${rawBase}/allWordsBank9_15.json${vParam}`),
-      fetchJsonWithCache(`${cdnBase}/fipiTasksBank9_15.json${vParam}`, `${rawBase}/fipiTasksBank9_15.json${vParam}`),
-      fetchJsonWithCache(`${cdnBase}/sprintBank9_15.json${vParam}`, `${rawBase}/sprintBank9_15.json${vParam}`),
+      fetchJsonWithCache(`${localBase}/allWordsBank9_15.json${vParam}`, `${cdnBase}/allWordsBank9_15.json${vParam}`),
+      fetchJsonWithCache(`${localBase}/fipiTasksBank9_15.json${vParam}`, `${cdnBase}/fipiTasksBank9_15.json${vParam}`),
+      fetchJsonWithCache(`${localBase}/sprintBank9_15.json${vParam}`, `${cdnBase}/sprintBank9_15.json${vParam}`),
     ]);
 
     let updated = false;
 
     if (allWordsData) {
       const wordsArr = Array.isArray(allWordsData) ? allWordsData : allWordsData.words || [];
-      if (wordsArr.length > PARSED_WORDS.length) {
+      if (wordsArr.length > 0) {
         PARSED_WORDS.length = 0;
         PARSED_WORDS.push(...wordsArr);
         updated = true;
       }
     }
 
-    if (Array.isArray(fipiData) && fipiData.length > PARSED_FIPI_QUESTIONS.length) {
+    if (Array.isArray(fipiData) && fipiData.length > 0) {
       PARSED_FIPI_QUESTIONS.length = 0;
       PARSED_FIPI_QUESTIONS.push(...fipiData);
       updated = true;
     }
 
-    if (Array.isArray(sprintData) && sprintData.length > PARSED_SPRINT_QUESTIONS.length) {
+    if (Array.isArray(sprintData) && sprintData.length > 0) {
       PARSED_SPRINT_QUESTIONS.length = 0;
       PARSED_SPRINT_QUESTIONS.push(...sprintData);
       updated = true;

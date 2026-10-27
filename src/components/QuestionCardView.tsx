@@ -373,7 +373,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
             const isDash = opt === '—';
             return (
               <button
-                key={opt}
+                key={`sprint-option-${idx}-${opt}`}
                 id={`sprint-option-${idx}`}
                 type="button"
                 disabled={isAnswered}

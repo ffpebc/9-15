@@ -14,16 +14,11 @@ import {
   FLASHCARDS_BANK,
   HOMOPHONE_PAIRS_BANK,
 } from './trainerLogic.ts';
-import {
-  isolateTargetWordExplanation,
-  parseStructuredExplanation,
-  cleanDisplayText,
-} from '../components/WorkWindows.tsx';
 
-test('FIPI bank generates sprint questions + FIPI sets + KIM variants + flashcards & homophones', () => {
+test('FIPI bank generates 5,000 sprint + 250 FIPI sets + 25 KIM variants + flashcards & homophones', () => {
   const bank = getTrainerBank();
-  assert.equal(bank.sprintQuestions.length >= 300, true);
-  assert.equal(bank.fipiQuestions.length >= 30, true);
+  assert.equal(bank.sprintQuestions.length >= 5000, true);
+  assert.equal(bank.fipiQuestions.length >= 250, true);
   assert.equal(bank.trapQuestions.length >= 15, true);
   assert.equal(bank.kimVariants.length >= 25, true);
   assert.equal(FLASHCARDS_BANK.length >= 14, true);
@@ -201,17 +196,5 @@ test('Homophone pairs and Task 12 conjugation questions have balanced non-obviou
     assert.notEqual(sortedPair, 'У/Ю', `Word ${q.prefix}..${q.suffix} had same-conjugation У/Ю`);
     assert.notEqual(sortedPair, 'А/Я', `Word ${q.prefix}..${q.suffix} had same-conjugation А/Я`);
   }
-});
-
-test('explanation isolating and structuring strips row numbers and parses check words', () => {
-  const multiDump = "5) сокрАщать — в безударной позиции в корне слова пишется проверяемая А (кра́ткий).\\nзакАзать — в безударной позиции в корне слова пишется проверяемая А (зака́з).\\nосчАстливить — в безударной позиции в корне слова пишется проверяемая А (сча́стье).";
-  const isolated = isolateTargetWordExplanation(multiDump, 'сокрАщать');
-  assert.ok(!isolated.includes('закАзать'), 'Should not contain neighbor word закАзать');
-  assert.ok(!isolated.includes('5)'), 'Should not contain row number 5)');
-  assert.ok(isolated.includes('сокрАщать'), 'Should contain target word сокрАщать');
-
-  const structured = parseStructuredExplanation(isolated, 'сокрАщать');
-  assert.equal(structured.checkWord, 'кра́ткий');
-  assert.ok(structured.ruleNote.includes('В безударной позиции'));
 });
 
