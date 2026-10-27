@@ -105,11 +105,12 @@ if (typeof window !== 'undefined' && 'caches' in window) {
     window.caches.delete('ege-bank-cache-v9');
     window.caches.delete('ege-bank-cache-v10');
     window.caches.delete('ege-bank-cache-v11');
+    window.caches.delete('ege-bank-cache-v12');
   } catch {}
 }
 
 async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<any> {
-  const cacheName = 'ege-bank-cache-v12';
+  const cacheName = 'ege-bank-cache-v13';
   let cache: Cache | null = null;
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {
@@ -172,7 +173,7 @@ export async function loadFullDataBank(): Promise<boolean> {
   try {
     const localBase = '/data';
     const cdnBase = 'https://cdn.jsdelivr.net/gh/ffpebc/9-15@data/public/data';
-    const vParam = '?v=12';
+    const vParam = '?v=13';
     const [allWordsData, fipiData, sprintData] = await Promise.all([
       fetchJsonWithCache(`${localBase}/allWordsBank9_15.json${vParam}`, `${cdnBase}/allWordsBank9_15.json${vParam}`),
       fetchJsonWithCache(`${localBase}/fipiTasksBank9_15.json${vParam}`, `${cdnBase}/fipiTasksBank9_15.json${vParam}`),

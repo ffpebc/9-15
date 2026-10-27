@@ -544,8 +544,9 @@ const TASK_KEY_EXCEPTIONS: Record<TaskId, string[]> = {
 export function cleanDisplayText(text: string): string {
   if (!text) return '';
   let s = String(text);
-  // Truncate scraper tail metadata (e.g. .4b:T95d,1) or 4a:T729 or 3f:[[[ or Ответ:/Источник:)
-  s = s.replace(/(?:[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+|\b[0-9a-f]{2}:\[\[\[|\n\s*Ответ\s*:|\n\s*Источник\s*:).*$/is, '');
+  // Truncate scraper tail metadata (e.g. .4b:T95d,1 or 4a:T729 or 3f:[[[ or Ответ:/Источник:)
+  s = s.replace(/(?:[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+|\b[0-9a-f]{2}:\[\[\[|(?:\b|\n|\.)\s*(?:Ответ|Источник)\s*:).*$/is, '');
+  s = s.replace(/\b(?:Ответ|Источник)\s*:[^.\n]*(?:\.|$)/gi, '');
   s = s
     .replace(/\\+r\\+n/g, '\n')
     .replace(/\\+n/g, '\n')
@@ -763,7 +764,8 @@ export function isolateTargetWordExplanation(
   if (!explanation) return '';
   let s = String(explanation);
   // Strip scraper tail metadata first so other tasks after .4b:T95d never pollute candidates
-  s = s.replace(/(?:[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+|\b[0-9a-f]{2}:\[\[\[|\n\s*Ответ\s*:|\n\s*Источник\s*:).*$/is, '');
+  s = s.replace(/(?:[\s.]*\d+[a-zA-Z0-9]*:[a-zA-Z0-9]+|\b[0-9a-f]{2}:\[\[\[|(?:\b|\n|\.)\s*(?:Ответ|Источник)\s*:).*$/is, '');
+  s = s.replace(/\b(?:Ответ|Источник)\s*:[^.\n]*(?:\.|$)/gi, '');
   s = s
     .replace(/\\+r\\+n/g, '\n')
     .replace(/\\+n/g, '\n')
