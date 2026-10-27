@@ -325,7 +325,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                 <div className="flex-1 flex flex-col items-start min-w-0 text-left">
                   <div className="flex items-center gap-1.5 w-full">
                     <span className="font-extrabold text-[13px] shrink-0">
-                      {isCorrect ? '✓ Верно!' : '✕ Ошибка'}
+                      {isCorrect ? 'Верно' : 'Ошибка'}
                     </span>
                     <span className="opacity-90 font-bold text-[12px] truncate">
                       {isCorrect ? `Ответ: ${question.answer}` : `Правильно: ${question.answer}`}
@@ -516,7 +516,6 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                   color: 'var(--ios-label)',
                   border: '1.5px solid var(--ios-separator)',
                 };
-                let symbol = '';
 
                 if (fipiSubmitted) {
                   if (row.isCorrectRow && isSelected) {
@@ -525,27 +524,24 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                       color: 'var(--ios-green)',
                       border: '2px solid var(--ios-green)',
                     };
-                    symbol = ' ✓';
                   } else if (row.isCorrectRow && !isSelected) {
                     btnStyle = {
                       background: 'var(--ios-orange-soft)',
                       color: 'var(--ios-orange)',
-                      border: '2px dashed var(--ios-orange)',
+                      border: '1.5px solid var(--ios-orange)',
                     };
-                    symbol = ' !';
                   } else if (!row.isCorrectRow && isSelected) {
                     btnStyle = {
                       background: 'var(--ios-red-soft)',
                       color: 'var(--ios-red)',
                       border: '2px solid var(--ios-red)',
                     };
-                    symbol = ' ✕';
                   } else {
                     btnStyle = {
                       background: 'var(--ios-bg-secondary)',
                       color: 'var(--ios-label-sec)',
                       border: '1px solid var(--ios-separator)',
-                      opacity: 0.6,
+                      opacity: 0.45,
                     };
                   }
                 } else if (isSelected) {
@@ -569,7 +565,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                     style={btnStyle}
                     aria-label={`Цифра ${digit}${isSelected ? ' (выбрана)' : ''}`}
                   >
-                    <span>{digit}{symbol}</span>
+                    <span>{digit}</span>
                   </button>
                 );
               })}
@@ -604,7 +600,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                           className="text-[11px] ml-auto font-semibold"
                           style={{ color: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-label-sec)' }}
                         >
-                          {row.isCorrectRow ? `(пишется ${row.letter}) ✓` : `(пишется ${row.letter})`}
+                          {`пишется «${row.letter}»`}
                         </span>
                       </div>
                       {row.explanation && (
@@ -664,10 +660,10 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                     >
                       {question.task === '13' || question.task === '14'
                         ? (row.isCorrectRow
-                            ? `✓ Подходит: ${row.letter}`
+                            ? `Подходит: ${row.letter}`
                             : `Не подходит: ${row.letter}`)
                         : (row.isCorrectRow
-                            ? `✓ Подходит: одна и та же буква «${row.letter}»`
+                            ? `Подходит: одна и та же буква «${row.letter}»`
                             : 'Разные буквы в ряду')}
                     </div>
                   )}
@@ -698,10 +694,10 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
               }}
             >
               {fipiResultOk ? (
-                <span>✓ Верно! Правильный ответ: <strong>{correctStr}</strong></span>
+                <span>Верно. Правильный ответ: <strong>{correctStr}</strong></span>
               ) : (
                 <span>
-                  ✕ Ошибка. Правильный ответ: <strong>{correctStr}</strong> (ваш выбор: <strong>{userStr || '—'}</strong>)
+                  Ошибка. Правильный ответ: <strong>{correctStr}</strong> (ваш выбор: <strong>{userStr || '—'}</strong>)
                 </span>
               )}
             </div>

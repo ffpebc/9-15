@@ -2204,11 +2204,11 @@ export default function App() {
                                     >
                                       {kimActiveTask === '15'
                                         ? (row.isCorrectRow
-                                            ? `✓ Подходит: пишется «${row.letter}»`
+                                            ? `Подходит: пишется «${row.letter}»`
                                             : `Не подходит: пишется «${row.letter}»`)
                                         : kimActiveTask === '13' || kimActiveTask === '14'
                                         ? (row.isCorrectRow
-                                            ? `✓ Подходит: ${row.letter}`
+                                            ? `Подходит: ${row.letter}`
                                             : `Не подходит: ${row.letter}`)
                                         : (row.isCorrectRow
                                             ? `Подходит (буква ${row.letter})`
