@@ -1024,7 +1024,7 @@ export default function App() {
                         }
                         options={[
                           { key: 'sprint', label: '1 слово (Игра)' },
-                          { key: 'fipi', label: 'ФИПИ (5 строк)' },
+                          { key: 'fipi', label: 'ФИПИ' },
                           { key: 'mixed', label: 'Смешанный' },
                         ]}
                       />
@@ -1436,7 +1436,7 @@ export default function App() {
                                         : ' '
                                   }${q.suffix}`
                                 : `${q.prefix}${q.answer.toLowerCase()}${q.suffix}`
-                              : `Задание № ${q.task} · 5 строк ФИПИ`;
+                              : `Задание № ${q.task} · ФИПИ`;
                           const correctChoice =
                             q.kind === 'sprint' ? q.answer : q.correctIndices.join('');
                           const explanation =

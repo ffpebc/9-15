@@ -1,0 +1,3066 @@
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  TaskId,
+  TASK_IDS,
+  TASK_META,
+  SprintGameMode,
+  LabSubMode,
+  StatSubMode,
+  TrainerQuestion,
+  TrainerState,
+  ErrorBankEntry,
+  FLASHCARDS_BANK,
+  HOMOPHONE_PAIRS_BANK,
+  createInitialState,
+  getTrainerBank,
+  clampTaskQty,
+  stepTaskQty,
+  calculateTotalPlanned,
+  calculateAccuracyPercent,
+  normalizeKimDigits,
+  buildWorkoutQueue,
+  balanceSprintQuestionsList,
+  buildBalancedHomophoneDeck,
+  shuffleArray,
+  applyAnswerToState,
+  encodeBackupCode,
+  decodeBackupCode,
+  cleanWord,
+  cleanExplanation,
+} from './utils/trainerLogic';
+import {
+  loadInitialStateSync,
+  loadFromIndexedDB,
+  persistStateMultiLayer,
+  pushStateToCloudPin,
+  pullStateFromCloudPin,
+} from './utils/storageSync';
+import { CheatsheetModal } from './components/CheatsheetModal';
+import { SyncModal } from './components/SyncModal';
+import { QuestionCardView } from './components/QuestionCardView';
+import { Task15SentenceView } from './components/Task15SentenceView';
+import {
+  PresetsModal,
+  RuleInspectorModal,
+  StructuredErrorCard,
+  DictionaryModal,
+  AppearanceModal,
+  LiquidGlassStyle,
+} from './components/WorkWindows';
+import {
+  LiquidGlassSegmented,
+  LiquidGlassTabBar,
+  QuizletFlashcardDeck,
+  SwipeableSheet,
+} from './components/LiquidGlassControls';
+
+type ActiveTab = 'workout' | 'sprint' | 'lab' | 'errors' | 'stats';
+type WorkoutSubView = 'builder' | 'active' | 'summary';
+
+const TAB_ORDER: Record<ActiveTab, number> = {
+  workout: 0,
+  sprint: 1,
+  lab: 2,
+  errors: 3,
+  stats: 4,
+};
+
+const WORKOUT_VIEW_ORDER: Record<WorkoutSubView, number> = {
+  builder: 0,
+  active: 1,
+  summary: 2,
+};
+
+const LAB_MODE_ORDER: Record<LabSubMode, number> = {
+  flashcards: 0,
+  pairs: 1,
+  kim: 2,
+};
+
+const STAT_MODE_ORDER: Record<StatSubMode, number> = {
+  overview: 0,
+  journal: 1,
+  cloud: 2,
+};
+
+const iosScreenSlideVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 84 : direction < 0 ? -84 : 0,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+    transition: {
+      x: { type: 'spring' as const, stiffness: 290, damping: 30, mass: 0.8 },
+      opacity: { duration: 0.22, ease: [0.25, 0.1, 0.25, 1] as const },
+    },
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -48 : direction < 0 ? 48 : 0,
+    opacity: 0,
+    pointerEvents: 'none' as const,
+    transition: {
+      x: { duration: 0.22, ease: [0.32, 0.72, 0, 1] as const },
+      opacity: { duration: 0.16, ease: 'easeOut' as const },
+    },
+  }),
+};
+
+interface SessionMistakeItem {
+  question: TrainerQuestion;
+  userChoice: string;
+}
+
+export default function App() {
+  const [bankRev, setBankRev] = useState(0);
+  useEffect(() => {
+    const onLoaded = () => setBankRev((r) => r + 1);
+    window.addEventListener('ege-bank-loaded', onLoaded);
+    return () => window.removeEventListener('ege-bank-loaded', onLoaded);
+  }, []);
+  const bank = useMemo(() => getTrainerBank(), [bankRev]);
+
+  const [state, setState] = useState<TrainerState>(() => loadInitialStateSync());
+  const [activeTab, setActiveTab] = useState<ActiveTab>('workout');
+  const [workoutView, setWorkoutView] = useState<WorkoutSubView>('builder');
+
+  // Liquid Glass optical customization state
+  const [glassStyle, setGlassStyle] = useState<LiquidGlassStyle>('clear');
+  const [specularEnabled, setSpecularEnabled] = useState(true);
+
+  // Active workout session state
+  const [sessionQueue, setSessionQueue] = useState<TrainerQuestion[]>([]);
+  const [sessionIndex, setSessionIndex] = useState(0);
+  const [sessionCorrect, setSessionCorrect] = useState(0);
+  const [sessionWrong, setSessionWrong] = useState(0);
+  const [sessionTaskTallies, setSessionTaskTallies] = useState<
+    Record<TaskId, { solved: number; correct: number }>
+  >({
+    '9': { solved: 0, correct: 0 },
+    '10': { solved: 0, correct: 0 },
+    '11': { solved: 0, correct: 0 },
+    '12': { solved: 0, correct: 0 },
+    '13': { solved: 0, correct: 0 },
+    '14': { solved: 0, correct: 0 },
+    '15': { solved: 0, correct: 0 },
+  });
+  const [sessionMistakes, setSessionMistakes] = useState<SessionMistakeItem[]>([]);
+  const [showSessionErrorsDrawer, setShowSessionErrorsDrawer] = useState(false);
+
+  // Quick Sprint & Arcade Modes state
+  const [sprintGameMode, setSprintGameMode] = useState<SprintGameMode>('endless');
+  const [sprintFilter, setSprintFilter] = useState<'all' | TaskId>('all');
+  const [sprintCursor, setSprintCursor] = useState(0);
+  const [blitzTimeLeft, setBlitzTimeLeft] = useState(60);
+  const [blitzScore, setBlitzScore] = useState(0);
+  const [blitzFinished, setBlitzFinished] = useState(false);
+  const [survivalLives, setSurvivalLives] = useState(3);
+  const [survivalScore, setSurvivalScore] = useState(0);
+  const [survivalFinished, setSurvivalFinished] = useState(false);
+
+  // Lab 9–13 Tab state (3D Flashcards, Homophone Pairs, KIM 9–13 Simulator)
+  const [labSubMode, setLabSubMode] = useState<LabSubMode>('flashcards');
+  const [fcFilter, setFcFilter] = useState<'all' | TaskId>('all');
+  const [fcIndex, setFcIndex] = useState(0);
+  const [fcFlipped, setFcFlipped] = useState(false);
+
+  const [pairDeck, setPairDeck] = useState(() =>
+    buildBalancedHomophoneDeck(HOMOPHONE_PAIRS_BANK)
+  );
+  const [pairIndex, setPairIndex] = useState(0);
+  const [pairSelectedOption, setPairSelectedOption] = useState<string | null>(null);
+
+  const [kimVariantIdx, setKimVariantIdx] = useState(0);
+  const [kimActiveTask, setKimActiveTask] = useState<TaskId>('9');
+  const [kimAnswers, setKimAnswers] = useState<Record<TaskId, string>>({
+    '9': '',
+    '10': '',
+    '11': '',
+    '12': '',
+    '13': '',
+    '14': '',
+    '15': '',
+  });
+  const [kimChecked, setKimChecked] = useState(false);
+
+  // Stats Sub-mode state
+  const [statSubMode, setStatSubMode] = useState<StatSubMode>('overview');
+  const [cloudCodeText, setCloudCodeText] = useState('');
+  const [cloudBannerMsg, setCloudBannerMsg] = useState('');
+
+  // Synchronous direction tracking for native iOS horizontal sliding transitions
+  const prevTabRef = useRef<ActiveTab>(activeTab);
+  const tabDirectionRef = useRef<number>(1);
+  if (prevTabRef.current !== activeTab) {
+    tabDirectionRef.current =
+      TAB_ORDER[activeTab] >= TAB_ORDER[prevTabRef.current] ? 1 : -1;
+    prevTabRef.current = activeTab;
+  }
+  const tabDirection = tabDirectionRef.current;
+
+  const prevWorkoutViewRef = useRef<WorkoutSubView>(workoutView);
+  const workoutDirectionRef = useRef<number>(1);
+  if (prevWorkoutViewRef.current !== workoutView) {
+    workoutDirectionRef.current =
+      WORKOUT_VIEW_ORDER[workoutView] >=
+      WORKOUT_VIEW_ORDER[prevWorkoutViewRef.current]
+        ? 1
+        : -1;
+    prevWorkoutViewRef.current = workoutView;
+  }
+  const workoutDirection = workoutDirectionRef.current;
+
+  const prevLabModeRef = useRef<LabSubMode>(labSubMode);
+  const labDirectionRef = useRef<number>(1);
+  if (prevLabModeRef.current !== labSubMode) {
+    labDirectionRef.current =
+      LAB_MODE_ORDER[labSubMode] >= LAB_MODE_ORDER[prevLabModeRef.current]
+        ? 1
+        : -1;
+    prevLabModeRef.current = labSubMode;
+  }
+  const labDirection = labDirectionRef.current;
+
+  const prevStatModeRef = useRef<StatSubMode>(statSubMode);
+  const statDirectionRef = useRef<number>(1);
+  if (prevStatModeRef.current !== statSubMode) {
+    statDirectionRef.current =
+      STAT_MODE_ORDER[statSubMode] >= STAT_MODE_ORDER[prevStatModeRef.current]
+        ? 1
+        : -1;
+    prevStatModeRef.current = statSubMode;
+  }
+  const statDirection = statDirectionRef.current;
+
+  // Liquid Glass Windows (Modals) state
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const [rulesInitialSection, setRulesInitialSection] = useState<'all' | TaskId>('all');
+  const [isSyncOpen, setIsSyncOpen] = useState(false);
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [isPresetsOpen, setIsPresetsOpen] = useState(false);
+  const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+  const [inspectedQuestion, setInspectedQuestion] = useState<TrainerQuestion | null>(null);
+  const [inspectedError, setInspectedError] = useState<ErrorBankEntry | null>(null);
+  const [isRuleInspectorOpen, setIsRuleInspectorOpen] = useState(false);
+  const [allMistakesCollapsed, setAllMistakesCollapsed] = useState(false);
+  const [allErrorsCollapsed, setAllErrorsCollapsed] = useState(false);
+
+  const openRuleInspector = (q: TrainerQuestion | null, err?: ErrorBankEntry | null) => {
+    setInspectedQuestion(q);
+    setInspectedError(err || null);
+    setIsRuleInspectorOpen(true);
+  };
+
+  const closeRuleInspector = () => {
+    setIsRuleInspectorOpen(false);
+    // Keep data during 440ms smooth slide-down sheet animation before nullifying!
+    setTimeout(() => {
+      setInspectedQuestion(null);
+      setInspectedError(null);
+    }, 480);
+  };
+
+  // 1. Load IndexedDB + Hosted Server Memory after initial paint so cold start is 0ms non-blocking
+  useEffect(() => {
+    const idbTimer = window.setTimeout(() => {
+      loadFromIndexedDB().then((idbState) => {
+        if (idbState) {
+          setState((prev) => (idbState.totalSolved > prev.totalSolved ? idbState : prev));
+        }
+      });
+    }, 60);
+
+    const cloudTimer = window.setTimeout(() => {
+      let initialPin: string | undefined;
+      try {
+        const hash = window.location.hash.replace(/^#/, '');
+        const params = new URLSearchParams(hash);
+        const urlPin = params.get('pin');
+        if (urlPin && urlPin.trim().length >= 2) {
+          initialPin = urlPin.trim().toUpperCase();
+        }
+      } catch {
+        // Ignore
+      }
+
+      pullStateFromCloudPin(initialPin).then((res) => {
+        if (res.found && res.state) {
+          setState((prev) =>
+            res.state!.totalSolved > prev.totalSolved ? res.state! : prev
+          );
+        }
+      });
+    }, 450);
+
+    return () => {
+      window.clearTimeout(idbTimer);
+      window.clearTimeout(cloudTimer);
+    };
+  }, []);
+
+  // 2. Non-blocking debounced persistence (zero redundant background requests or double re-renders)
+  useEffect(() => {
+    const localTimer = setTimeout(() => {
+      persistStateMultiLayer(state);
+    }, 250);
+
+    let cloudTimer: NodeJS.Timeout | undefined;
+    if (state.profilePin && state.profilePin.trim().length >= 2) {
+      cloudTimer = setTimeout(() => {
+        pushStateToCloudPin(state.profilePin, state);
+      }, 2500);
+    }
+
+    return () => {
+      clearTimeout(localTimer);
+      if (cloudTimer) clearTimeout(cloudTimer);
+    };
+  }, [state]);
+
+  // Populate backup code textarea only when user opens Stats -> Память sub-tab
+  useEffect(() => {
+    if (activeTab === 'stats' && statSubMode === 'cloud') {
+      setCloudCodeText(encodeBackupCode(state));
+    }
+  }, [activeTab, statSubMode, state]);
+
+  // 3. Sync Dark Mode & Liquid Glass optical classes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (state.darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    if (glassStyle === 'frosted') {
+      root.classList.add('glass-frosted');
+    } else {
+      root.classList.remove('glass-frosted');
+    }
+    if (!specularEnabled) {
+      root.classList.add('no-specular');
+    } else {
+      root.classList.remove('no-specular');
+    }
+    const themeMeta = document.getElementById('app-theme-color');
+    if (themeMeta) {
+      themeMeta.setAttribute('content', state.darkMode ? '#000000' : '#EAEFF8');
+    }
+  }, [state.darkMode, glassStyle, specularEnabled]);
+
+  // 5. Blitz 60s countdown timer
+  useEffect(() => {
+    if (activeTab !== 'sprint' || sprintGameMode !== 'blitz60' || blitzFinished) {
+      return;
+    }
+    const interval = setInterval(() => {
+      setBlitzTimeLeft((prev) => {
+        if (prev <= 1) {
+          setBlitzFinished(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeTab, sprintGameMode, blitzFinished]);
+
+  const resetViewportOnBlur = useCallback(() => {
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp) {
+      vp.setAttribute(
+        'content',
+        'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+      );
+    }
+  }, []);
+
+  const totalPlanned = useMemo(
+    () => calculateTotalPlanned(state.quantities),
+    [state.quantities]
+  );
+
+  // Filtered and balanced pool for Quick Sprint
+  const sprintPool = useMemo(() => {
+    const filtered =
+      sprintFilter === 'all'
+        ? bank.sprintQuestions
+        : bank.sprintQuestions.filter((q) => q.task === sprintFilter);
+    return balanceSprintQuestionsList(shuffleArray(filtered));
+  }, [bank.sprintQuestions, sprintFilter]);
+
+  const currentSprintQuestion =
+    sprintPool[sprintCursor % Math.max(1, sprintPool.length)] ||
+    bank.sprintQuestions[0];
+
+  // Filtered Flashcards
+  const filteredFlashcards = useMemo(() => {
+    if (fcFilter === 'all') return FLASHCARDS_BANK;
+    return FLASHCARDS_BANK.filter((fc) => fc.task === fcFilter);
+  }, [fcFilter]);
+
+  const currentFlashcard =
+    filteredFlashcards[fcIndex % Math.max(1, filteredFlashcards.length)] ||
+    FLASHCARDS_BANK[0];
+
+  const currentPair =
+    pairDeck[pairIndex % Math.max(1, pairDeck.length)] ||
+    HOMOPHONE_PAIRS_BANK[0];
+
+  const currentKimVariant =
+    bank.kimVariants[kimVariantIdx % Math.max(1, bank.kimVariants.length)] ||
+    bank.kimVariants[0];
+  const currentKimTaskQuestion =
+    currentKimVariant?.tasks?.[kimActiveTask] ||
+    currentKimVariant?.tasks?.['9'] ||
+    bank.fipiQuestions[0];
+
+  const handleSetTaskQty = (task: TaskId, newQty: number) => {
+    const clamped = clampTaskQty(newQty);
+    setState((prev) => ({
+      ...prev,
+      quantities: {
+        ...prev.quantities,
+        [task]: clamped,
+      },
+    }));
+  };
+
+  const handleStepTask = (task: TaskId, delta: number) => {
+    setState((prev) => ({
+      ...prev,
+      quantities: {
+        ...prev.quantities,
+        [task]: stepTaskQty(prev.quantities[task] || 0, delta),
+      },
+    }));
+  };
+
+  const handleApplyPreset = (qtyEach: number) => {
+    const clamped = clampTaskQty(qtyEach);
+    setState((prev) => ({
+      ...prev,
+      quantities: {
+        '9': clamped,
+        '10': clamped,
+        '11': clamped,
+        '12': clamped,
+        '13': clamped,
+        '14': clamped,
+        '15': clamped,
+      },
+    }));
+  };
+
+  const handleApplyCustomQuantities = (quantities: Record<TaskId, number>) => {
+    setState((prev) => ({
+      ...prev,
+      quantities,
+    }));
+  };
+
+  const startSessionWithQueue = (queue: TrainerQuestion[]) => {
+    if (queue.length === 0) return;
+    setSessionQueue(queue);
+    setSessionIndex(0);
+    setSessionCorrect(0);
+    setSessionWrong(0);
+    setSessionMistakes([]);
+    setShowSessionErrorsDrawer(false);
+    setSessionTaskTallies({
+      '9': { solved: 0, correct: 0 },
+      '10': { solved: 0, correct: 0 },
+      '11': { solved: 0, correct: 0 },
+      '12': { solved: 0, correct: 0 },
+      '13': { solved: 0, correct: 0 },
+      '14': { solved: 0, correct: 0 },
+      '15': { solved: 0, correct: 0 },
+    });
+    setActiveTab('workout');
+    setWorkoutView('active');
+  };
+
+  const handleStartPlannedWorkout = () => {
+    const queue = buildWorkoutQueue(state.quantities, state.workoutMode);
+    startSessionWithQueue(queue);
+  };
+
+  const handleStartWeakestTaskWorkout = (taskId: TaskId) => {
+    const customQty: Record<TaskId, number> = {
+      '9': 0,
+      '10': 0,
+      '11': 0,
+      '12': 0,
+      '13': 0,
+      '14': 0,
+      '15': 0,
+      [taskId]: 20,
+    };
+    const queue = buildWorkoutQueue(customQty, state.workoutMode);
+    startSessionWithQueue(queue);
+  };
+
+  const handleStartRealKimWorkout = () => {
+    setState((prev) => ({
+      ...prev,
+      quantities: { '9': 1, '10': 1, '11': 1, '12': 1, '13': 1, '14': 1, '15': 1 },
+      workoutMode: 'fipi',
+    }));
+    const queue = buildWorkoutQueue(
+      { '9': 1, '10': 1, '11': 1, '12': 1, '13': 1, '14': 1, '15': 1 },
+      'fipi',
+      { randomize: true }
+    );
+    startSessionWithQueue(queue);
+  };
+
+  const handleStartFipiTrapsWorkout = () => {
+    const freshTraps = balanceSprintQuestionsList(shuffleArray(bank.trapQuestions)).slice(0, 15);
+    startSessionWithQueue(freshTraps);
+  };
+
+  const handleStartErrorBankWorkout = () => {
+    const questionsFromErrors: TrainerQuestion[] = [];
+    for (const err of state.errorBank) {
+      const q = bank.byId.get(err.questionId);
+      if (q) questionsFromErrors.push(q);
+    }
+    if (questionsFromErrors.length > 0) {
+      startSessionWithQueue(questionsFromErrors);
+    } else {
+      handleStartFipiTrapsWorkout();
+    }
+  };
+
+  const recordJournalEntry = useCallback((title: string, total: number, correct: number) => {
+    if (total <= 0) return;
+    const accuracy = calculateAccuracyPercent(correct, total);
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    setState((prev) => ({
+      ...prev,
+      sessionsCompleted: prev.sessionsCompleted + 1,
+      sessionJournal: [
+        {
+          id: `sj-${Date.now()}`,
+          title,
+          total,
+          correct,
+          accuracy,
+          dateLabel: `Сегодня, ${timeStr}`,
+        },
+        ...(prev.sessionJournal || []),
+      ].slice(0, 25),
+    }));
+  }, []);
+
+  const handleSessionAnswer = useCallback((isCorrect: boolean, userChoiceLabel: string) => {
+    const currentQ = sessionQueue[sessionIndex];
+    if (!currentQ) return;
+
+    setState((prev) => applyAnswerToState(prev, currentQ, isCorrect, userChoiceLabel, false));
+
+    setSessionTaskTallies((prev) => {
+      const t = currentQ.task;
+      return {
+        ...prev,
+        [t]: {
+          solved: (prev[t]?.solved || 0) + 1,
+          correct: (prev[t]?.correct || 0) + (isCorrect ? 1 : 0),
+        },
+      };
+    });
+
+    const nextCorrect = sessionCorrect + (isCorrect ? 1 : 0);
+    const nextWrong = sessionWrong + (isCorrect ? 0 : 1);
+
+    if (isCorrect) {
+      setSessionCorrect(nextCorrect);
+    } else {
+      setSessionWrong(nextWrong);
+      setSessionMistakes((prev) => [
+        ...prev,
+        { question: currentQ, userChoice: userChoiceLabel },
+      ]);
+    }
+
+    if (sessionIndex + 1 < sessionQueue.length) {
+      setSessionIndex((idx) => idx + 1);
+    } else {
+      recordJournalEntry(
+        `Занятие (${sessionQueue.length} зад.)`,
+        nextCorrect + nextWrong,
+        nextCorrect
+      );
+      setWorkoutView('summary');
+    }
+  }, [sessionQueue, sessionIndex, sessionCorrect, sessionWrong, recordJournalEntry]);
+
+  const handleAbortWorkout = () => {
+    const totalDone = sessionCorrect + sessionWrong;
+    if (totalDone > 0) {
+      recordJournalEntry(`Занятие (${totalDone} зад.)`, totalDone, sessionCorrect);
+      setWorkoutView('summary');
+    } else {
+      setWorkoutView('builder');
+    }
+  };
+
+  const handleSelectSprintMode = (mode: SprintGameMode) => {
+    setSprintGameMode(mode);
+    if (mode === 'blitz60') {
+      setBlitzTimeLeft(60);
+      setBlitzScore(0);
+      setBlitzFinished(false);
+    } else if (mode === 'survival') {
+      setSurvivalLives(3);
+      setSurvivalScore(0);
+      setSurvivalFinished(false);
+    }
+  };
+
+  const handleRestartArcadeSprint = () => {
+    if (sprintGameMode === 'blitz60') {
+      setBlitzTimeLeft(60);
+      setBlitzScore(0);
+      setBlitzFinished(false);
+      setSprintCursor((c) => c + 1);
+    } else if (sprintGameMode === 'survival') {
+      setSurvivalLives(3);
+      setSurvivalScore(0);
+      setSurvivalFinished(false);
+      setSprintCursor((c) => c + 1);
+    }
+  };
+
+  const handleSprintAnswer = useCallback((isCorrect: boolean, userChoiceLabel: string) => {
+    if (sprintGameMode === 'blitz60' && blitzFinished) return;
+    if (sprintGameMode === 'survival' && survivalFinished) return;
+
+    let nextBlitzRecord = state.bestBlitz60 || 0;
+    let nextSurvivalRecord = state.bestSurvival || 0;
+
+    if (sprintGameMode === 'blitz60') {
+      const nextScore = blitzScore + (isCorrect ? 1 : 0);
+      setBlitzScore(nextScore);
+      if (nextScore > nextBlitzRecord) {
+        nextBlitzRecord = nextScore;
+      }
+    } else if (sprintGameMode === 'survival') {
+      if (isCorrect) {
+        const nextSurv = survivalScore + 1;
+        setSurvivalScore(nextSurv);
+        if (nextSurv > nextSurvivalRecord) {
+          nextSurvivalRecord = nextSurv;
+        }
+      } else {
+        const nextLives = survivalLives - 1;
+        setSurvivalLives(nextLives);
+        if (nextLives <= 0) {
+          setSurvivalFinished(true);
+        }
+      }
+    }
+
+    setState((prev) => {
+      const updated = applyAnswerToState(
+        prev,
+        currentSprintQuestion,
+        isCorrect,
+        userChoiceLabel,
+        true
+      );
+      return {
+        ...updated,
+        bestBlitz60: Math.max(updated.bestBlitz60 || 0, nextBlitzRecord),
+        bestSurvival: Math.max(updated.bestSurvival || 0, nextSurvivalRecord),
+      };
+    });
+    setSprintCursor((c) => c + 1);
+  }, [
+    sprintGameMode,
+    blitzFinished,
+    survivalFinished,
+    state.bestBlitz60,
+    state.bestSurvival,
+    blitzScore,
+    survivalScore,
+    survivalLives,
+    currentSprintQuestion,
+  ]);
+
+  // KIM 9–13 Blank handlers
+  const handleSelectKimVariant = (newIdx: number) => {
+    const wrapped = (newIdx + bank.kimVariants.length) % bank.kimVariants.length;
+    setKimVariantIdx(wrapped);
+    setKimActiveTask('9');
+    setKimAnswers({ '9': '', '10': '', '11': '', '12': '', '13': '', '14': '', '15': '' });
+    setKimChecked(false);
+  };
+
+  const handleToggleKimRowDigit = (rowNumber1Based: number) => {
+    if (kimChecked) return;
+    const digit = String(rowNumber1Based);
+    const currentVal = kimAnswers[kimActiveTask] || '';
+    const nextRaw = currentVal.includes(digit)
+      ? currentVal.replace(digit, '')
+      : currentVal + digit;
+    setKimAnswers((prev) => ({
+      ...prev,
+      [kimActiveTask]: normalizeKimDigits(nextRaw),
+    }));
+  };
+
+  const handleKimInputDirect = (val: string) => {
+    if (kimChecked) return;
+    setKimAnswers((prev) => ({
+      ...prev,
+      [kimActiveTask]: normalizeKimDigits(val),
+    }));
+  };
+
+  const handleCheckKimVariant = () => {
+    if (kimChecked) {
+      handleSelectKimVariant(kimVariantIdx + 1);
+      return;
+    }
+    setKimChecked(true);
+    let variantCorrectCount = 0;
+
+    setState((prev) => {
+      let nextState = { ...prev };
+      for (const t of TASK_IDS) {
+        const fq = currentKimVariant?.tasks?.[t];
+        if (!fq) continue;
+        const expected = (fq.correctIndices || []).join('');
+        const userAns = normalizeKimDigits(kimAnswers[t] || '');
+        const isOk = userAns === expected;
+        if (isOk) variantCorrectCount++;
+        nextState = applyAnswerToState(
+          nextState,
+          fq,
+          isOk,
+          userAns || 'пусто',
+          false
+        );
+      }
+      const accuracy = calculateAccuracyPercent(variantCorrectCount, TASK_IDS.length);
+      const timeStr = new Date().toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      return {
+        ...nextState,
+        sessionsCompleted: nextState.sessionsCompleted + 1,
+        sessionJournal: [
+          {
+            id: `sj-kim-${Date.now()}`,
+            title: `${currentKimVariant.title} (Задания 9–15)`,
+            total: TASK_IDS.length,
+            correct: variantCorrectCount,
+            accuracy,
+            dateLabel: `Сегодня, ${timeStr}`,
+          },
+          ...(nextState.sessionJournal || []),
+        ].slice(0, 25),
+      };
+    });
+  };
+
+  const handleConfirmResetStats = () => {
+    setState((prev) => ({
+      ...createInitialState(),
+      darkMode: prev.darkMode,
+      profilePin: prev.profilePin,
+    }));
+    setIsResetOpen(false);
+  };
+
+  const modeIndex =
+    state.workoutMode === 'sprint' ? 0 : state.workoutMode === 'fipi' ? 1 : 2;
+  const sprintModeIndex =
+    sprintGameMode === 'endless' ? 0 : sprintGameMode === 'blitz60' ? 1 : 2;
+  const labModeIndex =
+    labSubMode === 'flashcards' ? 0 : labSubMode === 'pairs' ? 1 : 2;
+  const statModeIndex =
+    statSubMode === 'overview' ? 0 : statSubMode === 'journal' ? 1 : 2;
+
+  const tabIndex =
+    activeTab === 'workout'
+      ? 0
+      : activeTab === 'sprint'
+      ? 1
+      : activeTab === 'lab'
+      ? 2
+      : activeTab === 'errors'
+      ? 3
+      : 4;
+
+  const sessionTotalAnswered = sessionCorrect + sessionWrong;
+  const sessionAccuracy = calculateAccuracyPercent(sessionCorrect, sessionTotalAnswered);
+  const globalAccuracy = calculateAccuracyPercent(state.totalCorrect, state.totalSolved);
+  const sprintAccuracy = calculateAccuracyPercent(state.sprintCorrect, state.sprintTotal);
+
+  return (
+    <>
+      {/* SVG Sprite for crisp iOS SF Symbols & Optical Filters */}
+      <svg style={{ display: 'none' }} xmlns="http://www.w3.org/2000/svg">
+        <symbol id="sf-play-circle-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 14.5v-9l7 4.5-7 4.5z" />
+        </symbol>
+        <symbol id="sf-bolt-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M13.5 2L4.8 13.4h6.3L9.5 22l9.7-11.4h-6.3L13.5 2z" />
+        </symbol>
+        <symbol id="sf-sparkles" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11.5 2L13.8 7.8L19.5 10L13.8 12.2L11.5 18L9.2 12.2L3.5 10L9.2 7.8L11.5 2ZM18.5 15L19.6 17.6L22.2 18.7L19.6 19.8L18.5 22.4L17.4 19.8L14.8 18.7L17.4 17.6L18.5 15Z" />
+        </symbol>
+        <symbol id="sf-warning-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1zm0 9a1.25 1.25 0 1 1 0-2.5A1.25 1.25 0 0 1 12 18z" />
+        </symbol>
+        <symbol id="sf-chart-fill" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="3" y="13" width="4.2" height="8" rx="1.2" />
+          <rect x="9.9" y="8" width="4.2" height="13" rx="1.2" />
+          <rect x="16.8" y="3" width="4.2" height="18" rx="1.2" />
+        </symbol>
+        <symbol id="sf-check-circle-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.7 7.7l-5.4 5.4a1 1 0 0 1-1.4 0l-2.6-2.6a1 1 0 1 1 1.4-1.4l1.9 1.9 4.7-4.7a1 1 0 0 1 1.4 1.4z" />
+        </symbol>
+        <symbol id="sf-xmark-circle-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm3.7 12.3a1 1 0 0 1-1.4 1.4L12 13.4l-2.3 2.3a1 1 0 0 1-1.4-1.4L10.6 12 8.3 9.7a1 1 0 0 1 1.4-1.4L12 10.6l2.3-2.3a1 1 0 0 1 1.4 1.4L13.4 12l2.3 2.3z" />
+        </symbol>
+        <symbol id="sf-book-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H11v18H6.5A2.5 2.5 0 0 0 4 22.5v-18zm16 0A2.5 2.5 0 0 0 17.5 2H13v18h4.5a2.5 2.5 0 0 1 2.5 2.5v-18z" />
+        </symbol>
+        <symbol id="sf-bookmark-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-6-4-6 4V3z" />
+        </symbol>
+        <symbol id="sf-cloud-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18.4 10.2A6.5 6.5 0 0 0 6 9.1 5 5 0 0 0 6.5 19h11.4a4.5 4.5 0 0 0 .5-8.8z" />
+        </symbol>
+        <symbol id="sf-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <line x1="4" y1="6" x2="20" y2="6" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="18" x2="20" y2="18" />
+          <circle cx="9" cy="6" r="2.2" fill="currentColor" />
+          <circle cx="15" cy="12" r="2.2" fill="currentColor" />
+          <circle cx="10" cy="18" r="2.2" fill="currentColor" />
+        </symbol>
+        <symbol id="sf-moon-fill" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </symbol>
+        <symbol id="sf-sun-fill" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="4.5" />
+          <path
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            d="M12 2v2.5M12 19.5V22M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M2 12h2.5M19.5 12H22M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77"
+          />
+        </symbol>
+        <symbol
+          id="sf-refresh"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+          <polyline points="3 3 3 8 8 8" />
+        </symbol>
+      </svg>
+
+      {/* Top Floating Spatial Liquid Glass Capsule Navbar */}
+      <header className="ios-navbar" role="banner">
+        <div className="ios-navbar-inner">
+          <div className="flex items-center justify-start gap-1.5 min-w-0">
+            <button
+              id="nav-rules-btn"
+              type="button"
+              onClick={() => {
+                setRulesInitialSection('all');
+                setIsRulesOpen(true);
+              }}
+              className="flex items-center gap-1 text-[12px] font-bold whitespace-nowrap shrink-0 cursor-pointer py-1.5 px-2.5 rounded-full active:scale-95 transition-transform"
+              style={{
+                background: 'var(--ios-blue-soft)',
+                color: 'var(--ios-blue)',
+              }}
+            >
+              <svg className="w-3.5 h-3.5 shrink-0">
+                <use href="#sf-book-fill" />
+              </svg>
+              <span>Шпаргалка</span>
+            </button>
+            <button
+              id="nav-dict-btn"
+              type="button"
+              onClick={() => setIsDictionaryOpen(true)}
+              className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1.5 rounded-full whitespace-nowrap shrink-0 cursor-pointer active:scale-95 transition-transform"
+              style={{
+                background: 'var(--ios-purple-soft)',
+                color: 'var(--ios-purple)',
+              }}
+              aria-label="Словарь исключений и ловушек ФИПИ"
+            >
+              <span>Словарь</span>
+            </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-1.5 min-w-0">
+            <button
+              id="nav-sync-btn"
+              type="button"
+              onClick={() => setIsSyncOpen(true)}
+              className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1.5 rounded-full whitespace-nowrap shrink-0 cursor-pointer active:scale-95 transition-transform"
+              style={{ background: 'var(--ios-blue-soft)', color: 'var(--ios-blue)' }}
+              aria-label="Память и сохранение"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0">
+                <use href="#sf-cloud-fill" />
+              </svg>
+              <span id="nav-sync-label" className="text-[11.5px] font-bold max-w-[76px] truncate">
+                {state.profilePin ? state.profilePin : 'Память'}
+              </span>
+            </button>
+            <button
+              id="nav-appearance-btn"
+              type="button"
+              onClick={() => setIsAppearanceOpen(true)}
+              className="flex items-center justify-center w-8 h-8 rounded-full shrink-0 cursor-pointer active:scale-95 transition-transform"
+              style={{ background: 'var(--ios-bg-tertiary)', color: 'var(--ios-blue)' }}
+              aria-label="Настройки Liquid Glass и темы"
+            >
+              <svg className="w-4 h-4 shrink-0">
+                <use href={state.darkMode ? '#sf-sun-fill' : '#sf-moon-fill'} />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Viewport Scroll Container */}
+      <div id="app-scroll-container" className="ios-viewport-scroll">
+        <main className="max-w-[600px] mx-auto px-3.5 pt-0.5 relative overflow-x-clip">
+          <AnimatePresence initial={false} custom={tabDirection} mode="popLayout">
+            {/* ======================================================================
+                TAB 1: WORKOUT BUILDER, ACTIVE WORKOUT & POST-SESSION SUMMARY
+               ====================================================================== */}
+            {activeTab === 'workout' && (
+              <motion.section
+                key="tab-workout"
+                id="screen-workout"
+                aria-label="Конструктор занятия"
+                custom={tabDirection}
+                variants={iosScreenSlideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <AnimatePresence
+                  initial={false}
+                  custom={workoutDirection}
+                  mode="popLayout"
+                >
+                  {workoutView === 'builder' && (
+                    <motion.div
+                      key="workout-builder"
+                      id="workout-builder-view"
+                      className="ios-screen-stack"
+                      custom={workoutDirection}
+                      variants={iosScreenSlideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                    >
+                  <div>
+                    {/* Clean Header with 1-tap Presets/Smart Focus Window Trigger */}
+                    <div className="flex items-center justify-between gap-1.5 mt-0.5 mb-2.5 min-w-0">
+                      <h1 className="ios-large-title !m-0">Новое занятие</h1>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          id="quick-start-kim-btn"
+                          onClick={handleStartRealKimWorkout}
+                          className="liquid-pill-btn flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold cursor-pointer shrink-0"
+                          style={{ color: 'var(--ios-blue)', background: 'var(--ios-blue-soft)' }}
+                          title="Реальный экзаменационный КИМ ЕГЭ (задания 9–15 ФИПИ)"
+                        >
+                          <svg className="w-3 h-3 shrink-0">
+                            <use href="#sf-sparkles" />
+                          </svg>
+                          <span>КИМ 9–15</span>
+                        </button>
+                        <button
+                          type="button"
+                          id="open-presets-modal-btn"
+                          onClick={() => setIsPresetsOpen(true)}
+                          className="liquid-pill-btn flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold cursor-pointer shrink-0"
+                        >
+                          <svg className="w-3 h-3 shrink-0">
+                            <use href="#sf-sliders" />
+                          </svg>
+                          <span>Шаблоны</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Mode Segmented Control (Draggable Apple Liquid Glass) */}
+                    <div className="mb-3">
+                      <div className="ios-section-header">Формат тренировки</div>
+                      <LiquidGlassSegmented
+                        id="workout-mode-segmented"
+                        ariaLabel="Формат тренировки"
+                        value={state.workoutMode}
+                        onChange={(modeKey) =>
+                          setState((prev) => ({ ...prev, workoutMode: modeKey }))
+                        }
+                        options={[
+                          { key: 'sprint', label: '1 слово (Игра)' },
+                          { key: 'fipi', label: 'ФИПИ' },
+                          { key: 'mixed', label: 'Смешанный' },
+                        ]}
+                      />
+                    </div>
+
+                    {/* Tasks 9–15 Liquid Glass Group (Uncluttered, full titles) */}
+                    <div className="ios-section-header">Задания блока орфографии (9–15)</div>
+                    <div className="ios-inset-group !mb-2.5">
+                      {TASK_IDS.map((taskId) => {
+                        const meta = TASK_META[taskId];
+                        const qty = state.quantities[taskId] || 0;
+                        return (
+                          <div key={taskId} className="ios-cell">
+                            <div
+                              className="ios-row-icon"
+                              style={{ background: meta.gradient }}
+                            >
+                              {taskId}
+                            </div>
+                            <div className="flex-1 min-w-0 pr-1.5">
+                              <div className="text-[13px] font-bold tracking-[-0.25px] leading-tight whitespace-nowrap truncate">
+                                {meta.title}
+                              </div>
+                              <div
+                                className="text-[11px] leading-tight truncate mt-0.5"
+                                style={{ color: 'var(--ios-label-sec)' }}
+                              >
+                                {meta.subtitle}
+                              </div>
+                            </div>
+                            <input
+                              id={`qty-badge-${taskId}`}
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              maxLength={4}
+                              value={qty}
+                              onChange={(e) => {
+                                const cleaned = e.target.value.replace(/[^0-9]/g, '');
+                                handleSetTaskQty(taskId, cleaned === '' ? 0 : Number(cleaned));
+                              }}
+                              onBlur={resetViewportOnBlur}
+                              className={`ios-count-badge ${qty > 0 ? 'has-value' : ''}`}
+                              aria-label={`Количество заданий ${taskId}`}
+                            />
+                            <div className="ios-stepper">
+                              <button
+                                type="button"
+                                className="ios-stepper-btn"
+                                disabled={qty <= 0}
+                                onClick={() => handleStepTask(taskId, -1)}
+                                aria-label={`Уменьшить задание ${taskId}`}
+                              >
+                                −
+                              </button>
+                              <div className="ios-stepper-divider" />
+                              <button
+                                type="button"
+                                className="ios-stepper-btn"
+                                disabled={qty >= 1000}
+                                onClick={() => handleStepTask(taskId, 1)}
+                                aria-label={`Увеличить задание ${taskId}`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Bottom Ergonomic Thumb-Zone: Primary Start CTA Docked at Bottom */}
+                  <div className="mt-auto pt-2 pb-1">
+                    <button
+                      type="button"
+                      id="start-workout-btn"
+                      disabled={totalPlanned <= 0}
+                      onClick={handleStartPlannedWorkout}
+                      className="ios-btn-primary"
+                    >
+                      <svg className="w-5 h-5 shrink-0">
+                        <use href="#sf-play-circle-fill" />
+                      </svg>
+                      <span id="start-workout-label">
+                        {totalPlanned > 0
+                          ? `Начать занятие (${totalPlanned} заданий)`
+                          : 'Выберите хотя бы 1 задание'}
+                      </span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {workoutView === 'active' && sessionQueue[sessionIndex] && (
+                <motion.div
+                  key="workout-active"
+                  id="workout-active-view"
+                  className="ios-screen-stack"
+                  custom={workoutDirection}
+                  variants={iosScreenSlideVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                >
+                  <div className="ios-inset-group p-3.5 !mb-0">
+                    <div className="flex items-center justify-between gap-1.5 mb-2 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 text-[13px] font-semibold whitespace-nowrap shrink-0">
+                        <span style={{ color: 'var(--ios-blue)' }} className="font-extrabold">
+                          Задание {sessionQueue[sessionIndex].task}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span style={{ color: 'var(--ios-label-sec)' }} className="font-bold">
+                          {sessionIndex + 1} из {sessionQueue.length}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          id="open-rule-inspector-btn"
+                          onClick={() => openRuleInspector(sessionQueue[sessionIndex], null)}
+                          className="text-[11.5px] font-bold px-2.5 py-1 rounded-full cursor-pointer whitespace-nowrap shrink-0"
+                          style={{
+                            background: 'var(--ios-blue-soft)',
+                            color: 'var(--ios-blue)',
+                          }}
+                        >
+                          Правило ?
+                        </button>
+                        <button
+                          type="button"
+                          id="abort-workout-btn"
+                          onClick={handleAbortWorkout}
+                          className="text-[11.5px] font-bold px-2.5 py-1 rounded-full cursor-pointer whitespace-nowrap shrink-0"
+                          style={{
+                            background: 'var(--ios-red-soft)',
+                            color: 'var(--ios-red)',
+                          }}
+                        >
+                          Завершить
+                        </button>
+                      </div>
+                    </div>
+
+                    <div
+                      className="w-full h-2 rounded-full overflow-hidden mb-2.5"
+                      style={{ background: 'var(--ios-bg-tertiary)' }}
+                    >
+                      <div
+                        id="session-progress-fill"
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: `${Math.max(
+                            6,
+                            Math.round(((sessionIndex + 1) / sessionQueue.length) * 100)
+                          )}%`,
+                          background: 'var(--ios-blue)',
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div id="live-correct-pill" className="score-pill-correct flex-1 justify-center">
+                        <svg className="w-4 h-4 shrink-0">
+                          <use href="#sf-check-circle-fill" />
+                        </svg>
+                        <span>
+                          Верно: <strong id="live-correct-val">{sessionCorrect}</strong>
+                        </span>
+                      </div>
+                      <div id="live-wrong-pill" className="score-pill-wrong flex-1 justify-center">
+                        <svg className="w-4 h-4 shrink-0">
+                          <use href="#sf-xmark-circle-fill" />
+                        </svg>
+                        <span>
+                          Ошибок: <strong id="live-wrong-val">{sessionWrong}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    key={
+                      sessionQueue[sessionIndex]?.instanceId ||
+                      `${sessionIndex}-${sessionQueue[sessionIndex]?.id}`
+                    }
+                    id="session-question-card"
+                    className="ios-inset-group p-4 !mb-0 flex-1 flex flex-col justify-between ios-subview-animate"
+                  >
+                    <QuestionCardView
+                      key={
+                        sessionQueue[sessionIndex]?.instanceId ||
+                        `${sessionIndex}-${sessionQueue[sessionIndex]?.id}`
+                      }
+                      question={sessionQueue[sessionIndex]}
+                      onAnswer={handleSessionAnswer}
+                    />
+                  </div>
+                </motion.div>
+              )}
+
+              {workoutView === 'summary' && (
+                <motion.div
+                  key="workout-summary"
+                  id="workout-summary-view"
+                  custom={workoutDirection}
+                  variants={iosScreenSlideVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                >
+                  <div className="ios-inset-group p-6 text-center">
+                    <div
+                      id="summary-percent-badge"
+                      className="text-[36px] font-extrabold mb-1"
+                      style={{
+                        color:
+                          sessionAccuracy >= 80
+                            ? 'var(--ios-green)'
+                            : sessionAccuracy >= 50
+                            ? 'var(--ios-orange)'
+                            : 'var(--ios-red)',
+                      }}
+                    >
+                      {sessionAccuracy}%
+                    </div>
+                    <h2
+                      id="summary-headline"
+                      className="text-[22px] font-extrabold tracking-tight mb-1"
+                    >
+                      {sessionAccuracy >= 85
+                        ? 'Отличный результат!'
+                        : sessionAccuracy >= 60
+                        ? 'Хорошая тренировка!'
+                        : 'Есть над чем поработать'}
+                    </h2>
+                    <p
+                      id="summary-subline"
+                      className="text-[14px] mb-4"
+                      style={{ color: 'var(--ios-label-sec)' }}
+                    >
+                      Выполнено: {sessionTotalAnswered} · Правильных: {sessionCorrect} · Ошибок:{' '}
+                      {sessionWrong}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div
+                        className="p-3.5 rounded-2xl"
+                        style={{
+                          background: 'var(--ios-green-soft)',
+                          color: 'var(--ios-green)',
+                        }}
+                      >
+                        <div className="text-[24px] font-extrabold">{sessionCorrect}</div>
+                        <div className="text-[12px] font-bold">Правильно</div>
+                      </div>
+                      <div
+                        className="p-3.5 rounded-2xl"
+                        style={{
+                          background: 'var(--ios-red-soft)',
+                          color: 'var(--ios-red)',
+                        }}
+                      >
+                        <div className="text-[24px] font-extrabold">{sessionWrong}</div>
+                        <div className="text-[12px] font-bold">Ошибок</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="ios-section-header">Точность по заданиям в занятии</div>
+                  <div className="ios-inset-group">
+                    {TASK_IDS.map((taskId) => {
+                      const tally = sessionTaskTallies[taskId] || { solved: 0, correct: 0 };
+                      if (tally.solved === 0) return null;
+                      const acc = calculateAccuracyPercent(tally.correct, tally.solved);
+                      return (
+                        <div key={taskId} className="ios-cell">
+                          <div
+                            className="ios-row-icon"
+                            style={{ background: TASK_META[taskId].gradient }}
+                          >
+                            {taskId}
+                          </div>
+                          <div className="flex-1 min-w-0 pr-2">
+                            <div className="text-[14px] font-bold">
+                              {TASK_META[taskId].title}
+                            </div>
+                            <div
+                              className="text-[12px]"
+                              style={{ color: 'var(--ios-label-sec)' }}
+                            >
+                              Верно {tally.correct} из {tally.solved}
+                            </div>
+                          </div>
+                          <div
+                            className="text-[15px] font-extrabold"
+                            style={{
+                              color:
+                                acc >= 80
+                                  ? 'var(--ios-green)'
+                                  : acc >= 50
+                                  ? 'var(--ios-orange)'
+                                  : 'var(--ios-red)',
+                            }}
+                          >
+                            {acc}%
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 mb-4">
+                    {sessionMistakes.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setShowSessionErrorsDrawer((v) => !v)}
+                          className="ios-btn-primary"
+                          style={{ background: 'var(--ios-orange)' }}
+                        >
+                          <svg className="w-5 h-5 shrink-0">
+                            <use href="#sf-warning-fill" />
+                          </svg>
+                          <span>
+                            {showSessionErrorsDrawer
+                              ? 'Скрыть разбор ошибок'
+                              : `Ошибки (${sessionMistakes.length}) — открыть разбор`}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            startSessionWithQueue(sessionMistakes.map((m) => m.question))
+                          }
+                          className="ios-btn-primary"
+                          style={{ background: 'var(--ios-indigo)' }}
+                        >
+                          <svg className="w-5 h-5 shrink-0">
+                            <use href="#sf-refresh" />
+                          </svg>
+                          <span>Отработать ошибки этого занятия</span>
+                        </button>
+                      </>
+                    )}
+
+                    <button
+                      type="button"
+                      id="summary-repeat-random-btn"
+                      onClick={handleStartPlannedWorkout}
+                      className="ios-btn-primary"
+                    >
+                      <svg className="w-5 h-5 shrink-0">
+                        <use href="#sf-sparkles" />
+                      </svg>
+                      <span>Новый случайный вариант ({totalPlanned} зад.)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="back-to-builder-btn"
+                      onClick={() => setWorkoutView('builder')}
+                      className="ios-btn-glass-secondary"
+                    >
+                      <span>Настроить конструктор</span>
+                    </button>
+                  </div>
+
+                  <div className={`ios-accordion-grid ${showSessionErrorsDrawer && sessionMistakes.length > 0 ? 'open' : ''} mt-3 mb-4`}>
+                    <div className="ios-accordion-content">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="ios-section-header !mb-0">Подробный разбор допущенных ошибок</div>
+                          <button
+                            type="button"
+                            id="toggle-all-mistakes-btn"
+                            onClick={() => setAllMistakesCollapsed((c) => !c)}
+                            className="liquid-pill-btn text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5"
+                            style={{
+                              background: allMistakesCollapsed ? 'var(--ios-blue-soft)' : undefined,
+                              color: allMistakesCollapsed ? 'var(--ios-blue)' : undefined,
+                            }}
+                          >
+                            <span>{allMistakesCollapsed ? 'Развернуть все' : 'Свернуть все'}</span>
+                            <svg
+                              className={`w-3.5 h-3.5 ios-accordion-arrow ${allMistakesCollapsed ? 'rotated' : ''}`}
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polyline points="18 15 12 9 6 15" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-2.5">
+                        {sessionMistakes.map((m, idx) => {
+                          const q = m.question;
+                          const wordTitle =
+                            q.kind === 'sprint'
+                              ? q.task === '13' || q.task === '14'
+                                ? `${q.prefix.replace(/[()]/g, '')}${
+                                    q.answer === 'СЛИТНО'
+                                      ? ''
+                                      : q.answer === 'ДЕФИСНО'
+                                        ? '-'
+                                        : ' '
+                                  }${q.suffix}`
+                                : `${q.prefix}${q.answer.toLowerCase()}${q.suffix}`
+                              : `Задание № ${q.task} · ФИПИ`;
+                          const correctChoice =
+                            q.kind === 'sprint' ? q.answer : q.correctIndices.join('');
+                          const explanation =
+                            q.kind === 'sprint'
+                              ? q.explanation
+                              : q.rows
+                                  .map((r, rIdx) =>
+                                    r.isCorrectRow
+                                      ? `Строка ${rIdx + 1} (${r.letter}): ${r.solvedWords.join(', ')}`
+                                      : null
+                                  )
+                                  .filter(Boolean)
+                                  .join(' | ');
+                          return (
+                            <StructuredErrorCard
+                              key={`${q.id}-${idx}`}
+                              forceCollapsed={allMistakesCollapsed}
+                              task={q.task}
+                              topic={q.topic}
+                              wordTitle={wordTitle}
+                              context={q.kind === 'sprint' ? q.context : undefined}
+                              userChoice={m.userChoice}
+                              correctChoice={correctChoice}
+                              explanation={explanation}
+                              rule={q.rule}
+                              question={q}
+                              onInspectRule={() => {
+                                openRuleInspector(q, {
+                                  id: `err-${q.id}`,
+                                  task: q.task,
+                                  topic: q.topic,
+                                  wordDisplay: q.kind === 'sprint' ? `${q.prefix}..${q.suffix}` : wordTitle,
+                                  correctWord: wordTitle,
+                                  userChoice: m.userChoice,
+                                  correctChoice: correctChoice,
+                                  context: q.kind === 'sprint' ? q.context : undefined,
+                                  explanation: explanation,
+                                  rule: q.rule,
+                                  timestamp: Date.now(),
+                                  questionId: q.id,
+                                });
+                              }}
+                              staggerIndex={idx}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+                </AnimatePresence>
+              </motion.section>
+            )}
+
+            {/* ======================================================================
+                TAB 2: QUICK SPRINT & ARCADE MODES (БЕСКОНЕЧНЫЙ / БЛИЦ 60С / 3 ЖИЗНИ)
+               ====================================================================== */}
+            {activeTab === 'sprint' && (
+              <motion.section
+                key="tab-sprint"
+                id="screen-sprint"
+                aria-label="Быстрый спринт"
+                custom={tabDirection}
+                variants={iosScreenSlideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <div className="ios-screen-stack">
+                <div>
+                  <div className="flex items-center justify-between gap-1.5 mt-0.5 mb-2 min-w-0 whitespace-nowrap">
+                    <h1 className="ios-large-title !m-0">Спринт</h1>
+                    <div className="flex items-center gap-1 text-[11px] font-bold whitespace-nowrap shrink-0">
+                      {sprintGameMode === 'blitz60' && (
+                        <span
+                          id="sprint-timer-pill"
+                          className="px-2 py-1 rounded-full text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          style={{
+                            background: 'var(--ios-blue-soft)',
+                            color: 'var(--ios-blue)',
+                          }}
+                        >
+                          00:{String(blitzTimeLeft).padStart(2, '0')} · {blitzScore}
+                        </span>
+                      )}
+                      {sprintGameMode === 'survival' && (
+                        <span
+                          id="sprint-lives-pill"
+                          className="px-2 py-1 rounded-full text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          style={{
+                            background: 'var(--ios-red-soft)',
+                            color: 'var(--ios-red)',
+                          }}
+                        >
+                          {'♥'.repeat(Math.max(0, survivalLives))}
+                          {'♡'.repeat(Math.max(0, 3 - survivalLives))} · {survivalScore}
+                        </span>
+                      )}
+                      <span
+                        id="sprint-streak-pill"
+                        className="px-2 py-1 rounded-full whitespace-nowrap shrink-0"
+                        style={{
+                          background: 'var(--ios-orange-soft)',
+                          color: 'var(--ios-orange)',
+                        }}
+                      >
+                        Серия: {state.sprintStreak}
+                      </span>
+                      <button
+                        type="button"
+                        id="sprint-rule-btn"
+                        onClick={() => openRuleInspector(currentSprintQuestion, null)}
+                        className="liquid-pill-btn px-2.5 py-1 rounded-full text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        Правило ?
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Arcade Sprint Mode Segmented Control (Draggable Apple Liquid Glass) */}
+                  <div className="mb-2">
+                    <LiquidGlassSegmented
+                      id="sprint-mode-segmented"
+                      ariaLabel="Режим спринта"
+                      value={sprintGameMode}
+                      onChange={handleSelectSprintMode}
+                      options={[
+                        { key: 'endless', label: 'Бесконечный' },
+                        { key: 'blitz60', label: 'Блиц 60с' },
+                        { key: 'survival', label: '3 жизни' },
+                      ]}
+                    />
+                  </div>
+
+                  <div className="mb-1">
+                    <LiquidGlassSegmented
+                      id="sprint-task-filter-segmented"
+                      ariaLabel="Фильтр спринта по заданиям"
+                      value={sprintFilter}
+                      onChange={setSprintFilter}
+                      compact
+                      options={[
+                        { key: 'all', label: 'Все' },
+                        { key: '9', label: '№ 9' },
+                        { key: '10', label: '№ 10' },
+                        { key: '11', label: '№ 11' },
+                        { key: '12', label: '№ 12' },
+                        { key: '13', label: '№ 13' },
+                        { key: '14', label: '№ 14' },
+                        { key: '15', label: '№ 15' },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                {/* Either Active Question Card or Arcade Game Over Screen */}
+                {(sprintGameMode === 'blitz60' && blitzFinished) ||
+                (sprintGameMode === 'survival' && survivalFinished) ? (
+                  <div className="ios-inset-group p-6 !mb-0 flex-1 flex flex-col items-center justify-center text-center">
+                    <div
+                      className="text-[40px] font-extrabold mb-1"
+                      style={{ color: 'var(--ios-blue)' }}
+                    >
+                      {sprintGameMode === 'blitz60' ? blitzScore : survivalScore}
+                    </div>
+                    <h2 className="text-[21px] font-extrabold mb-1">
+                      {sprintGameMode === 'blitz60'
+                        ? 'Время вышло! Блиц 60с завершён'
+                        : 'Жизни закончились! Режим «3 жизни»'}
+                    </h2>
+                    <p
+                      className="text-[13px] mb-5"
+                      style={{ color: 'var(--ios-label-sec)' }}
+                    >
+                      {sprintGameMode === 'blitz60'
+                        ? `Ваш результат: ${blitzScore} верных · Рекорд: ${state.bestBlitz60}`
+                        : `Ваш результат: ${survivalScore} подряд · Рекорд: ${state.bestSurvival}`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleRestartArcadeSprint}
+                      className="ios-btn-primary max-w-[280px]"
+                    >
+                      <svg className="w-5 h-5 shrink-0">
+                        <use href="#sf-refresh" />
+                      </svg>
+                      <span>Сыграть ещё раз</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    id="quick-sprint-host"
+                    className="ios-inset-group p-4 !mb-0 flex-1 flex flex-col justify-between"
+                  >
+                    <QuestionCardView
+                      question={currentSprintQuestion}
+                      onAnswer={handleSprintAnswer}
+                    />
+                  </div>
+                )}
+              </div>
+              </motion.section>
+            )}
+
+            {/* ======================================================================
+                TAB 3: LAB 9–13 (3D FLASHCARDS, HOMOPHONE PAIRS & KIM 9–13 SIMULATOR)
+               ====================================================================== */}
+            {activeTab === 'lab' && (
+              <motion.section
+                key="tab-lab"
+                id="screen-lab"
+                aria-label="Лаборатория 9–15"
+                custom={tabDirection}
+                variants={iosScreenSlideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <div className="ios-screen-stack !justify-start">
+                  <div>
+                    <div className="flex items-center justify-between gap-1.5 mt-0.5 mb-1.5 min-w-0 whitespace-nowrap">
+                      <h1 className="ios-large-title !m-0">Лаборатория 9–15</h1>
+                      <button
+                        type="button"
+                        id="lab-traps-dict-btn"
+                        onClick={() => setIsDictionaryOpen(true)}
+                        className="liquid-pill-btn px-2.5 py-1 rounded-full text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        Словарь ловушек
+                      </button>
+                    </div>
+
+                    {/* Lab Mode Segmented Control (Draggable Apple Liquid Glass) */}
+                    <div className="mb-1.5">
+                      <LiquidGlassSegmented
+                        id="lab-mode-segmented"
+                        ariaLabel="Режим лаборатории"
+                        value={labSubMode}
+                        onChange={setLabSubMode}
+                        options={[
+                          { key: 'flashcards', label: 'Карточки' },
+                          { key: 'pairs', label: 'Омофоны' },
+                          { key: 'kim', label: 'КИМ 9–15' },
+                        ]}
+                      />
+                    </div>
+                  </div>
+
+                  <AnimatePresence
+                    initial={false}
+                    custom={labDirection}
+                    mode="popLayout"
+                  >
+                    {/* SUB-VIEW A: QUIZLET-STYLE 3D FLASHCARD STACK (NO BOTTOM BUTTONS) */}
+                    {labSubMode === 'flashcards' && (
+                      <motion.div
+                        key="lab-flashcards"
+                        className="flex-1 flex flex-col"
+                        custom={labDirection}
+                        variants={iosScreenSlideVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                      >
+                        <QuizletFlashcardDeck
+                          cards={filteredFlashcards}
+                          filterTask={fcFilter}
+                          onChangeFilterTask={setFcFilter}
+                        />
+                      </motion.div>
+                    )}
+
+                    {/* SUB-VIEW B: HOMOPHONE PAIRS DUEL */}
+                    {labSubMode === 'pairs' && (
+                      <motion.div
+                        key="lab-pairs"
+                        id="lab-pairs-view"
+                        className="ios-inset-group p-4 !mb-0 flex-1 flex flex-col justify-between"
+                        custom={labDirection}
+                        variants={iosScreenSlideVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                      >
+                    <div className="flex items-center justify-between gap-2 whitespace-nowrap">
+                      <span
+                        className="text-[11.5px] font-bold px-2.5 py-1 rounded-full truncate"
+                        style={{
+                          background: 'var(--ios-purple-soft)',
+                          color: 'var(--ios-purple)',
+                        }}
+                      >
+                        № {currentPair.task} · {currentPair.topic}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className="text-[11px] font-semibold"
+                          style={{ color: 'var(--ios-label-sec)' }}
+                        >
+                          {(pairIndex % pairDeck.length) + 1}/
+                          {pairDeck.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const sampleForTask = bank.sprintQuestions.find(
+                              (q) => q.task === currentPair.task
+                            );
+                            if (sampleForTask) openRuleInspector(sampleForTask, null);
+                          }}
+                          className="liquid-pill-btn text-[11px] font-bold px-2 py-0.5 rounded-full cursor-pointer shrink-0"
+                        >
+                          Правило ?
+                        </button>
+                      </div>
+                    </div>
+
+                    <div
+                      key={pairIndex}
+                      className="my-auto py-2 flex flex-col gap-2 word-stage-animate"
+                    >
+                      <div
+                        className="text-[12px] font-bold text-center whitespace-nowrap"
+                        style={{ color: 'var(--ios-label-sec)' }}
+                      >
+                        {currentPair.task === '13'
+                          ? 'Выберите слитное или раздельное написание:'
+                          : 'Выберите пару букв по смыслу в скобках:'}
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2">
+                        <div
+                          className="p-3 rounded-2xl"
+                          style={{
+                            background: 'var(--ios-bg-secondary)',
+                            border: '0.5px solid var(--ios-separator)',
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <div
+                              className="text-[10.5px] font-bold uppercase"
+                              style={{ color: 'var(--ios-blue)' }}
+                            >
+                              1-е словосочетание
+                            </div>
+                            {pairSelectedOption && (
+                              <span
+                                className="text-[10.5px] font-extrabold px-2 py-0.5 rounded-md"
+                                style={{
+                                  background: 'var(--ios-green-soft)',
+                                  color: 'var(--ios-green)',
+                                }}
+                              >
+                                {currentPair.leftAns === 'СЛИТНО' ||
+                                currentPair.leftAns === 'РАЗДЕЛЬНО' ||
+                                currentPair.leftAns === 'ДЕФИСНО'
+                                  ? currentPair.leftAns
+                                  : `Буква ${currentPair.leftAns}`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[18px] font-extrabold leading-tight">
+                            {pairSelectedOption
+                              ? currentPair.leftWordGap.includes('..')
+                                ? currentPair.leftWordGap.replace(
+                                    '..',
+                                    currentPair.leftAns
+                                  )
+                                : currentPair.leftAns === 'СЛИТНО'
+                                ? currentPair.leftWordGap.replace(
+                                    /\(([^)]+)\)\s*/g,
+                                    '$1'
+                                  )
+                                : currentPair.leftAns === 'ДЕФИСНО'
+                                ? currentPair.leftWordGap.replace(
+                                    /\(([^)]+)\)\s*/g,
+                                    '$1-'
+                                  )
+                                : currentPair.leftWordGap.replace(
+                                    /\(([^)]+)\)\s*/g,
+                                    '$1 '
+                                  )
+                              : currentPair.leftWordGap}
+                          </div>
+                          <div
+                            className="text-[13px] font-semibold mt-0.5 leading-snug"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            {currentPair.leftContext}
+                          </div>
+                        </div>
+
+                        <div
+                          className="p-3 rounded-2xl"
+                          style={{
+                            background: 'var(--ios-bg-secondary)',
+                            border: '0.5px solid var(--ios-separator)',
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <div
+                              className="text-[10.5px] font-bold uppercase"
+                              style={{ color: 'var(--ios-purple)' }}
+                            >
+                              2-е словосочетание
+                            </div>
+                            {pairSelectedOption && (
+                              <span
+                                className="text-[10.5px] font-extrabold px-2 py-0.5 rounded-md"
+                                style={{
+                                  background: 'var(--ios-green-soft)',
+                                  color: 'var(--ios-green)',
+                                }}
+                              >
+                                {currentPair.rightAns === 'СЛИТНО' ||
+                                currentPair.rightAns === 'РАЗДЕЛЬНО' ||
+                                currentPair.rightAns === 'ДЕФИСНО'
+                                  ? currentPair.rightAns
+                                  : `Буква ${currentPair.rightAns}`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[18px] font-extrabold leading-tight">
+                            {pairSelectedOption
+                              ? currentPair.rightWordGap.includes('..')
+                                ? currentPair.rightWordGap.replace(
+                                    '..',
+                                    currentPair.rightAns
+                                  )
+                                : currentPair.rightAns === 'СЛИТНО'
+                                ? currentPair.rightWordGap.replace(
+                                    /\(([^)]+)\)\s*/g,
+                                    '$1'
+                                  )
+                                : currentPair.rightAns === 'ДЕФИСНО'
+                                ? currentPair.rightWordGap.replace(
+                                    /\(([^)]+)\)\s*/g,
+                                    '$1-'
+                                  )
+                                : currentPair.rightWordGap.replace(
+                                    /\(([^)]+)\)\s*/g,
+                                    '$1 '
+                                  )
+                              : currentPair.rightWordGap}
+                          </div>
+                          <div
+                            className="text-[13px] font-semibold mt-0.5 leading-snug"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            {currentPair.rightContext}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fixed-height feedback slot so buttons never jump */}
+                      <div className="min-h-[38px] flex items-center justify-center">
+                        {pairSelectedOption ? (
+                          <div
+                            className="px-3 py-1.5 rounded-xl text-[12px] font-bold leading-snug text-center w-full ios-feedback-pop"
+                            style={{
+                              background:
+                                pairSelectedOption === currentPair.correctOption
+                                  ? 'var(--ios-green-soft)'
+                                  : 'var(--ios-red-soft)',
+                              color:
+                                pairSelectedOption === currentPair.correctOption
+                                  ? 'var(--ios-green)'
+                                  : 'var(--ios-red)',
+                            }}
+                          >
+                            {currentPair.explanation}
+                          </div>
+                        ) : (
+                          <span
+                            className="text-[11px] font-semibold"
+                            style={{ color: 'var(--ios-label-ter)' }}
+                          >
+                            Сравните значения обоих слов перед ответом
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {currentPair.options.map((opt, idx) => {
+                          let stateClass = '';
+                          if (pairSelectedOption) {
+                            if (opt === currentPair.correctOption) stateClass = 'ok';
+                            else if (opt === pairSelectedOption) stateClass = 'bad';
+                          }
+                          const hasTwoParts = opt.includes(' / ');
+                          const [firstPart, secondPart] = hasTwoParts
+                            ? opt.split(' / ')
+                            : [opt, ''];
+                          const firstDisplay =
+                            firstPart.length <= 2
+                              ? firstPart
+                              : firstPart.charAt(0).toUpperCase() +
+                                firstPart.slice(1).toLowerCase();
+                          const secondDisplay =
+                            secondPart.length <= 2
+                              ? secondPart
+                              : secondPart.charAt(0).toUpperCase() +
+                                secondPart.slice(1).toLowerCase();
+
+                          return (
+                            <button
+                              key={`pair-opt-${idx}-${opt}`}
+                              type="button"
+                              id={`pair-opt-btn-${idx}`}
+                              disabled={pairSelectedOption !== null}
+                              onClick={() => {
+                                setPairSelectedOption(opt);
+                                setTimeout(() => {
+                                  setPairSelectedOption(null);
+                                  setPairIndex((prevIdx) => {
+                                    const nextIdx = prevIdx + 1;
+                                    if (nextIdx >= pairDeck.length) {
+                                      setPairDeck(
+                                        buildBalancedHomophoneDeck(
+                                          HOMOPHONE_PAIRS_BANK
+                                        )
+                                      );
+                                      return 0;
+                                    }
+                                    return nextIdx;
+                                  });
+                                }, 650);
+                              }}
+                              className={`choice-card-btn ${
+                                hasTwoParts ? 'pair-word-mode' : 'word-mode'
+                              } ${stateClass}`}
+                            >
+                              <span
+                                className="w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-extrabold shrink-0"
+                                style={{
+                                  background: 'var(--ios-bg-secondary)',
+                                  color: 'var(--ios-label-sec)',
+                                }}
+                              >
+                                {idx + 1}
+                              </span>
+                              {hasTwoParts ? (
+                                <div className="flex flex-col items-start justify-center leading-tight text-left min-w-0 w-full overflow-hidden py-0.5">
+                                  <div className="text-[12px] sm:text-[13px] font-extrabold tracking-tight truncate w-full text-left">
+                                    1: {firstDisplay}
+                                  </div>
+                                  <div
+                                    className="text-[12px] sm:text-[13px] font-extrabold tracking-tight truncate w-full text-left mt-0.5"
+                                    style={{ color: 'var(--ios-label-sec)' }}
+                                  >
+                                    2: {secondDisplay}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[19px] font-extrabold tracking-tight">
+                                  {opt}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* SUB-VIEW C: KIM 9–13 BLANK SIMULATOR (25 VARIANTS) */}
+                {labSubMode === 'kim' && (
+                  <motion.div
+                    key="lab-kim"
+                    id="lab-kim-view"
+                    className="flex-1 flex flex-col justify-between gap-2"
+                    custom={labDirection}
+                    variants={iosScreenSlideVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                  >
+                    <div>
+                      {/* Variant Selector Header */}
+                      <div className="flex items-center justify-between gap-2 mb-2 px-1">
+                        <button
+                          type="button"
+                          id="kim-prev-var"
+                          onClick={() => handleSelectKimVariant(kimVariantIdx - 1)}
+                          className="liquid-pill-btn px-3 py-1 rounded-full text-[12px] font-bold cursor-pointer"
+                          style={{ color: 'var(--ios-label)' }}
+                        >
+                          ← Пред.
+                        </button>
+                        <div
+                          id="kim-var-title"
+                          className="text-[14px] font-extrabold text-center"
+                        >
+                          {currentKimVariant.title} из {bank.kimVariants.length}
+                        </div>
+                        <button
+                          type="button"
+                          id="kim-next-var"
+                          onClick={() => handleSelectKimVariant(kimVariantIdx + 1)}
+                          className="liquid-pill-btn px-3 py-1 rounded-full text-[12px] font-bold cursor-pointer"
+                          style={{ color: 'var(--ios-label)' }}
+                        >
+                          След. →
+                        </button>
+                      </div>
+
+                      {/* 5 Task Tabs (9, 10, 11, 12, 13) */}
+                      <div className="kim-nav-grid">
+                        {TASK_IDS.map((tId) => {
+                          const userAns = normalizeKimDigits(kimAnswers[tId] || '');
+                          const expected = (
+                            currentKimVariant?.tasks?.[tId]?.correctIndices || []
+                          ).join('');
+                          let checkClass = '';
+                          if (kimChecked) {
+                            checkClass =
+                              userAns === expected ? 'checked-ok' : 'checked-bad';
+                          }
+                          return (
+                            <button
+                              key={tId}
+                              type="button"
+                              onClick={() => setKimActiveTask(tId)}
+                              className={`kim-task-tab ${
+                                kimActiveTask === tId ? 'active' : ''
+                              } ${checkClass}`}
+                            >
+                              <span className="text-[12px] font-extrabold">№ {tId}</span>
+                              <span
+                                className="text-[11px] font-mono font-bold"
+                                style={{ color: 'var(--ios-label-sec)' }}
+                              >
+                                {userAns || '—'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Current KIM Task Card + Official Blank Answer Input */}
+                      <div
+                        key={`${kimVariantIdx}-${kimActiveTask}`}
+                        className="ios-inset-group p-3 !mb-0 word-stage-animate"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="min-w-0 flex-1 pr-1">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className="text-[12.5px] font-extrabold whitespace-nowrap"
+                                style={{ color: 'var(--ios-blue)' }}
+                              >
+                                Задание № {kimActiveTask}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => openRuleInspector(currentKimTaskQuestion, null)}
+                                className="liquid-pill-btn text-[10.5px] font-bold px-2 py-0.5 rounded-full cursor-pointer shrink-0"
+                              >
+                                Правило ?
+                              </button>
+                            </div>
+                            <div
+                              className="text-[11px] leading-snug mt-0.5"
+                              style={{ color: 'var(--ios-label-sec)' }}
+                            >
+                              {currentKimTaskQuestion.rule} ({TASK_META[kimActiveTask].cheatPages})
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className="text-[11px] font-bold whitespace-nowrap"
+                              style={{ color: 'var(--ios-label-sec)' }}
+                            >
+                              Бланк:
+                            </span>
+                            <input
+                              id="kim-blank-input"
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={5}
+                              value={kimAnswers[kimActiveTask] || ''}
+                              onChange={(e) => handleKimInputDirect(e.target.value)}
+                              onBlur={resetViewportOnBlur}
+                              placeholder="12..."
+                              aria-label={`Ответ бланка для задания ${kimActiveTask}`}
+                              className="ege-blank-input"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Task 15 Authentic Sentence View in KIM */}
+                        {kimActiveTask === '15' && (currentKimTaskQuestion.instruction || (currentKimTaskQuestion as any).sentence) && (
+                          <div
+                            className="p-3.5 rounded-2xl mb-2.5 text-left border border-[var(--ios-separator)] shadow-xs"
+                            style={{
+                              background: 'var(--ios-bg-secondary)',
+                              color: 'var(--ios-label)',
+                            }}
+                          >
+                            <div
+                              className="text-[10px] font-extrabold uppercase tracking-wider mb-1.5 opacity-70"
+                              style={{ color: 'var(--ios-blue)' }}
+                            >
+                              Предложение задания:
+                            </div>
+                            <Task15SentenceView
+                              sentence={currentKimTaskQuestion.instruction || (currentKimTaskQuestion as any).sentence || ''}
+                              rows={currentKimTaskQuestion.rows}
+                              selectedDigits={(kimAnswers['15'] || '').split('').map(Number).filter(Boolean)}
+                              isSubmitted={kimChecked}
+                              onToggleDigit={handleToggleKimRowDigit}
+                            />
+                          </div>
+                        )}
+
+                        {kimActiveTask === '15' ? (
+                          <div className="flex flex-col gap-2 my-1">
+                            <div
+                              className="text-[11px] font-bold text-center uppercase tracking-wider opacity-65"
+                              style={{ color: 'var(--ios-label-sec)' }}
+                            >
+                              {kimChecked ? 'Результат по номерам пропусков:' : 'Выберите цифры ответа:'}
+                            </div>
+
+                            <div className="flex items-center justify-center gap-3 sm:gap-4 my-1 w-full max-w-sm mx-auto">
+                              {currentKimTaskQuestion.rows.map((row, idx) => {
+                                const digit = idx + 1;
+                                const isPicked = (kimAnswers['15'] || '').includes(String(digit));
+                                let circleClass = 'w-12 h-12 sm:w-14 sm:h-14 rounded-full text-[19px] sm:text-[21px] font-black flex items-center justify-center transition-all select-none shadow-xs active:scale-95 cursor-pointer';
+                                let circleStyle: React.CSSProperties = {
+                                  background: 'var(--ios-bg-secondary)',
+                                  color: 'var(--ios-label)',
+                                  border: '1.5px solid var(--ios-separator)',
+                                };
+
+                                if (kimChecked) {
+                                  if (row.isCorrectRow && isPicked) {
+                                    circleStyle = {
+                                      background: 'var(--ios-green-soft)',
+                                      color: 'var(--ios-green)',
+                                      border: '2px solid var(--ios-green)',
+                                    };
+                                  } else if (row.isCorrectRow && !isPicked) {
+                                    circleStyle = {
+                                      background: 'var(--ios-orange-soft)',
+                                      color: 'var(--ios-orange)',
+                                      border: '1.5px solid var(--ios-orange)',
+                                    };
+                                  } else if (!row.isCorrectRow && isPicked) {
+                                    circleStyle = {
+                                      background: 'var(--ios-red-soft)',
+                                      color: 'var(--ios-red)',
+                                      border: '2px solid var(--ios-red)',
+                                    };
+                                  } else {
+                                    circleStyle = {
+                                      background: 'var(--ios-bg-secondary)',
+                                      color: 'var(--ios-label-sec)',
+                                      border: '1px solid var(--ios-separator)',
+                                      opacity: 0.45,
+                                    };
+                                  }
+                                } else if (isPicked) {
+                                  circleStyle = {
+                                    background: 'var(--ios-blue)',
+                                    color: '#FFFFFF',
+                                    border: '2px solid var(--ios-blue)',
+                                    boxShadow: '0 4px 14px rgba(0, 122, 255, 0.35)',
+                                  };
+                                  circleClass += ' scale-105';
+                                }
+
+                                return (
+                                  <button
+                                    key={digit}
+                                    id={`kim-row-${digit}`}
+                                    type="button"
+                                    onClick={() => handleToggleKimRowDigit(digit)}
+                                    className={circleClass}
+                                    style={circleStyle}
+                                    aria-label={`Цифра ${digit}${isPicked ? ' (выбрана)' : ''}`}
+                                  >
+                                    <span>{digit}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Explanations shown only AFTER checking KIM */}
+                            {kimChecked && (
+                              <div className="flex flex-col gap-1.5 mt-2 text-left">
+                                {currentKimTaskQuestion.rows.map((row, idx) => {
+                                  const digit = idx + 1;
+                                  const solvedWord = cleanWord(row.solvedWords[0] || row.words[0]);
+                                  return (
+                                    <div
+                                      key={digit}
+                                      className="p-2.5 rounded-2xl border border-[var(--ios-separator)] text-[12px]"
+                                      style={{ background: 'var(--ios-bg-secondary)' }}
+                                    >
+                                      <div className="flex items-center gap-2 font-bold mb-0.5">
+                                        <span
+                                          className="w-5 h-5 rounded-full text-[11px] font-extrabold flex items-center justify-center shrink-0"
+                                          style={{
+                                            background: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-bg-tertiary)',
+                                            color: row.isCorrectRow ? '#fff' : 'var(--ios-label-sec)',
+                                          }}
+                                        >
+                                          {digit}
+                                        </span>
+                                        <span className="font-extrabold" style={{ color: 'var(--ios-label)' }}>
+                                          {solvedWord}
+                                        </span>
+                                        <span
+                                          className="text-[11px] ml-auto font-semibold"
+                                          style={{ color: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-label-sec)' }}
+                                        >
+                                          {`пишется «${row.letter}»`}
+                                        </span>
+                                      </div>
+                                      {row.explanation && (
+                                        <div className="text-[11px] opacity-85 leading-snug pl-7" style={{ color: 'var(--ios-label-sec)' }}>
+                                          {cleanExplanation(row.explanation)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            {currentKimTaskQuestion.rows.map((row, idx) => {
+                              const rowNum = idx + 1;
+                              const isPicked = (kimAnswers[kimActiveTask] || '').includes(
+                                String(rowNum)
+                              );
+                              let rowStateClass = isPicked ? 'selected' : '';
+                              if (kimChecked) {
+                                if (row.isCorrectRow && isPicked) rowStateClass = 'ok';
+                                else if (row.isCorrectRow && !isPicked)
+                                  rowStateClass = 'missed';
+                                else if (!row.isCorrectRow && isPicked)
+                                  rowStateClass = 'bad';
+                              }
+
+                              const displayWords = kimChecked ? row.solvedWords : row.words;
+
+                              return (
+                                <button
+                                  key={rowNum}
+                                  type="button"
+                                  onClick={() => handleToggleKimRowDigit(rowNum)}
+                                  className={`fipi-row-cell ${rowStateClass}`}
+                                >
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-extrabold shrink-0"
+                                    style={{
+                                      background: isPicked
+                                        ? 'var(--ios-blue)'
+                                        : 'var(--ios-bg-tertiary)',
+                                      color: isPicked ? '#FFFFFF' : 'var(--ios-label)',
+                                    }}
+                                  >
+                                    {rowNum}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-[13px] font-bold leading-snug">
+                                      {displayWords.join(', ')}
+                                    </div>
+                                    {kimChecked && (
+                                      <div
+                                        className="text-[11px] font-semibold mt-0.5 truncate"
+                                        style={{
+                                          color: row.isCorrectRow
+                                            ? 'var(--ios-green)'
+                                            : 'var(--ios-label-sec)',
+                                        }}
+                                      >
+                                        {kimActiveTask === '13' || kimActiveTask === '14'
+                                          ? (row.isCorrectRow
+                                              ? `Подходит: ${row.letter}`
+                                              : `Не подходит: ${row.letter}`)
+                                          : (row.isCorrectRow
+                                              ? `Подходит (буква ${row.letter})`
+                                              : 'Разные буквы в ряду')}
+                                      </div>
+                                    )}
+                                    {kimChecked && row.explanation && (
+                                      <div
+                                        className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
+                                        style={{ color: 'var(--ios-label-sec)' }}
+                                      >
+                                        {row.explanation}
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {kimChecked && (
+                          <div
+                            className="mt-2.5 p-2.5 rounded-xl text-[12px] font-bold flex items-center justify-between"
+                            style={{
+                              background: 'var(--ios-bg-secondary)',
+                              color: 'var(--ios-label)',
+                            }}
+                          >
+                            <span>
+                              Ваш ответ:{' '}
+                              <strong>
+                                {kimAnswers[kimActiveTask] || 'пусто'}
+                              </strong>
+                            </span>
+                            <span style={{ color: 'var(--ios-green)' }}>
+                              Эталон ФИПИ:{' '}
+                              {(currentKimTaskQuestion?.correctIndices || []).join('')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-auto pt-1">
+                      <button
+                        type="button"
+                        id="kim-check-all-btn"
+                        onClick={handleCheckKimVariant}
+                        className="ios-btn-primary"
+                      >
+                        <svg className="w-5 h-5 shrink-0">
+                          <use href="#sf-check-circle-fill" />
+                        </svg>
+                        <span>
+                          {kimChecked
+                            ? 'Следующий вариант КИМ →'
+                            : 'Проверить вариант (5 заданий)'}
+                        </span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+                  </AnimatePresence>
+                </div>
+              </motion.section>
+            )}
+
+            {/* ======================================================================
+                TAB 4: GLOBAL ERROR BANK (БАНК ОШИБОК + ОДНОСТРОЧНАЯ КНОПКА ВНИЗУ)
+               ====================================================================== */}
+            {activeTab === 'errors' && (
+              <motion.section
+                key="tab-errors"
+                id="screen-errors"
+                aria-label="Банк ошибок"
+                custom={tabDirection}
+                variants={iosScreenSlideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <div className="ios-screen-stack">
+                <div>
+                  <div className="flex items-center justify-between gap-2 mt-0.5 mb-2.5 min-w-0">
+                    <h1 className="ios-large-title !m-0">Банк ошибок</h1>
+                    {state.errorBank.length > 0 ? (
+                      <button
+                        type="button"
+                        id="start-error-workout-btn"
+                        onClick={handleStartErrorBankWorkout}
+                        className="ios-btn-tinted shrink-0"
+                      >
+                        <svg className="w-4 h-4 shrink-0">
+                          <use href="#sf-play-circle-fill" />
+                        </svg>
+                        <span>Отработать все ({state.errorBank.length})</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsDictionaryOpen(true)}
+                        className="liquid-pill-btn px-2.5 py-1 rounded-full text-[11.5px] font-bold cursor-pointer shrink-0"
+                      >
+                        Словарь ФИПИ
+                      </button>
+                    )}
+                  </div>
+
+                  <div id="global-errors-container">
+                    {state.errorBank.length > 0 && (
+                      <div className="flex items-center justify-between px-1 mb-2">
+                        <span className="text-[12px] font-bold" style={{ color: 'var(--ios-label-sec)' }}>
+                          Ошибок в банке: {state.errorBank.length}
+                        </span>
+                        <button
+                          type="button"
+                          id="toggle-all-errors-btn"
+                          onClick={() => setAllErrorsCollapsed((c) => !c)}
+                          className="liquid-pill-btn text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5"
+                          style={{
+                            background: allErrorsCollapsed ? 'var(--ios-blue-soft)' : undefined,
+                            color: allErrorsCollapsed ? 'var(--ios-blue)' : undefined,
+                          }}
+                        >
+                          <span>{allErrorsCollapsed ? 'Развернуть все' : 'Свернуть все'}</span>
+                          <svg
+                            className={`w-3.5 h-3.5 ios-accordion-arrow ${allErrorsCollapsed ? 'rotated' : ''}`}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="18 15 12 9 6 15" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    {state.errorBank.length === 0 ? (
+                      <div className="ios-inset-group p-6 text-center">
+                        <div
+                          className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
+                          style={{
+                            background: 'var(--ios-green-soft)',
+                            color: 'var(--ios-green)',
+                          }}
+                        >
+                          <svg className="w-6 h-6">
+                            <use href="#sf-check-circle-fill" />
+                          </svg>
+                        </div>
+                        <div className="text-[18px] font-extrabold mb-1">
+                          Ошибок пока нет
+                        </div>
+                        <p
+                          className="text-[13px] max-w-[320px] mx-auto"
+                          style={{ color: 'var(--ios-label-sec)' }}
+                        >
+                          Все слова, в которых вы допустите ошибку в Занятии, Спринте или
+                          КИМ, автоматически появятся здесь с правилом.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2.5">
+                        {state.errorBank.map((err: ErrorBankEntry, idx: number) => {
+                          const linkedQuestion = bank.byId.get(err.questionId);
+                          const targetQuestion: TrainerQuestion = linkedQuestion || {
+                            id: err.questionId || err.id,
+                            kind: 'sprint',
+                            task: err.task,
+                            topic: err.topic,
+                            rule: err.rule,
+                            prefix: err.wordDisplay.split('..')[0] || '',
+                            suffix: err.wordDisplay.split('..')[1] || '',
+                            answer: err.correctChoice,
+                            options: [err.correctChoice, err.userChoice],
+                            context: err.context || '',
+                            explanation: err.explanation,
+                          };
+
+                          return (
+                            <StructuredErrorCard
+                              key={err.id}
+                              forceCollapsed={allErrorsCollapsed}
+                              task={err.task}
+                              topic={err.topic}
+                              wordTitle={err.correctWord}
+                              context={err.context}
+                              userChoice={err.userChoice}
+                              correctChoice={err.correctChoice}
+                              explanation={err.explanation}
+                              rule={err.rule}
+                              question={targetQuestion}
+                              staggerIndex={idx}
+                              onInspectRule={() => {
+                                openRuleInspector(targetQuestion, err);
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Clean Single-Line Bottom Button */}
+                <div id="errors-bottom-deck" className="mt-auto pt-2 pb-1">
+                  <button
+                    type="button"
+                    id="train-fipi-traps-btn"
+                    onClick={handleStartFipiTrapsWorkout}
+                    className="ios-btn-primary whitespace-nowrap"
+                  >
+                    <svg className="w-5 h-5 shrink-0">
+                      <use href="#sf-bolt-fill" />
+                    </svg>
+                    <span className="whitespace-nowrap">
+                      Тренировать ловушки ФИПИ (15 шт.)
+                    </span>
+                  </button>
+                </div>
+              </div>
+              </motion.section>
+            )}
+
+            {/* ======================================================================
+                TAB 5: GLOBAL STATISTICS, JOURNAL & HOSTED MEMORY
+               ====================================================================== */}
+            {activeTab === 'stats' && (
+              <motion.section
+                key="tab-stats"
+                id="screen-stats"
+                aria-label="Статистика"
+                custom={tabDirection}
+                variants={iosScreenSlideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <div className="ios-screen-stack">
+                  <div>
+                    <div className="flex items-center justify-between gap-1.5 mt-0.5 mb-2 min-w-0">
+                      <h1 className="ios-large-title !m-0">Статистика</h1>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          id="open-sync-from-stats-btn"
+                          onClick={() => setIsSyncOpen(true)}
+                          className="liquid-pill-btn text-[11px] font-bold px-2.5 py-1 rounded-full cursor-pointer whitespace-nowrap shrink-0"
+                        >
+                          Синхронизация
+                        </button>
+                        <button
+                          type="button"
+                          id="open-reset-modal-btn"
+                          onClick={() => setIsResetOpen(true)}
+                          className="text-[11px] font-bold px-2.5 py-1 rounded-full cursor-pointer whitespace-nowrap shrink-0 active:scale-95 transition-transform"
+                          style={{
+                            background: 'var(--ios-red-soft)',
+                            color: 'var(--ios-red)',
+                          }}
+                        >
+                          Сбросить
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Stats Segmented Control: Обзор | Журнал | Память (Draggable Apple Liquid Glass) */}
+                    <div className="mb-2.5">
+                      <LiquidGlassSegmented
+                        id="stats-mode-segmented"
+                        ariaLabel="Разделы статистики"
+                        value={statSubMode}
+                        onChange={setStatSubMode}
+                        options={[
+                          { key: 'overview', label: 'Обзор' },
+                          { key: 'journal', label: 'Журнал' },
+                          { key: 'cloud', label: 'Память' },
+                        ]}
+                      />
+                    </div>
+
+                    <AnimatePresence
+                      initial={false}
+                      custom={statDirection}
+                      mode="popLayout"
+                    >
+                      {statSubMode === 'overview' && (
+                        <motion.div
+                          key="stats-overview"
+                          id="stats-overview-view"
+                          custom={statDirection}
+                          variants={iosScreenSlideVariants}
+                          initial="enter"
+                          animate="center"
+                          exit="exit"
+                        >
+                      <div className="grid grid-cols-3 gap-2.5 mb-2.5">
+                        <div className="ios-inset-group !mb-0 p-3 text-center">
+                          <div id="global-stat-total" className="text-[22px] font-extrabold">
+                            {state.totalSolved}
+                          </div>
+                          <div
+                            className="text-[11px] font-bold"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            Решено
+                          </div>
+                        </div>
+                        <div className="ios-inset-group !mb-0 p-3 text-center">
+                          <div
+                            id="global-stat-acc"
+                            className="text-[22px] font-extrabold"
+                            style={{ color: 'var(--ios-green)' }}
+                          >
+                            {globalAccuracy}%
+                          </div>
+                          <div
+                            className="text-[11px] font-bold"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            Точность
+                          </div>
+                        </div>
+                        <div className="ios-inset-group !mb-0 p-3 text-center">
+                          <div
+                            id="global-stat-sessions"
+                            className="text-[22px] font-extrabold"
+                            style={{ color: 'var(--ios-blue)' }}
+                          >
+                            {state.sessionsCompleted}
+                          </div>
+                          <div
+                            className="text-[11px] font-bold"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            Занятий
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Arcade Records Row */}
+                      <div className="grid grid-cols-3 gap-2 mb-2.5">
+                        <div className="ios-inset-group !mb-0 p-2.5 text-center">
+                          <div
+                            id="stat-best-streak"
+                            className="text-[17px] font-extrabold"
+                            style={{ color: 'var(--ios-orange)' }}
+                          >
+                            {state.bestStreak || 0}
+                          </div>
+                          <div
+                            className="text-[10.5px] font-bold whitespace-nowrap truncate"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            Лучшая серия
+                          </div>
+                        </div>
+                        <div className="ios-inset-group !mb-0 p-2.5 text-center">
+                          <div
+                            id="stat-best-blitz"
+                            className="text-[17px] font-extrabold"
+                            style={{ color: 'var(--ios-purple)' }}
+                          >
+                            {state.bestBlitz60 || 0}
+                          </div>
+                          <div
+                            className="text-[10.5px] font-bold whitespace-nowrap truncate"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            Блиц 60 сек
+                          </div>
+                        </div>
+                        <div className="ios-inset-group !mb-0 p-2.5 text-center">
+                          <div
+                            id="stat-best-surv"
+                            className="text-[17px] font-extrabold"
+                            style={{ color: 'var(--ios-pink)' }}
+                          >
+                            {state.bestSurvival || 0}
+                          </div>
+                          <div
+                            className="text-[10.5px] font-bold whitespace-nowrap truncate"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            Выживание 3♥
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="ios-section-header">Освоение тем (Задания 9–15)</div>
+                      <div id="global-task-bars" className="ios-inset-group !mb-0">
+                        {TASK_IDS.map((taskId) => {
+                          const meta = TASK_META[taskId];
+                          const st = state.taskStats[taskId] || { solved: 0, correct: 0 };
+                          const acc = calculateAccuracyPercent(st.correct, st.solved);
+                          return (
+                            <div key={taskId} className="ios-cell">
+                              <div
+                                className="ios-row-icon"
+                                style={{ background: meta.gradient }}
+                              >
+                                {taskId}
+                              </div>
+                              <div className="flex-1 min-w-0 pr-2">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <span className="text-[13px] font-bold tracking-[-0.2px] whitespace-nowrap truncate">
+                                    {meta.title}
+                                  </span>
+                                  <span
+                                    className="text-[11.5px] font-bold whitespace-nowrap shrink-0"
+                                    style={{ color: 'var(--ios-label-sec)' }}
+                                  >
+                                    {st.correct}/{st.solved} ({acc}%)
+                                  </span>
+                                </div>
+                                <div
+                                  className="w-full h-2 rounded-full overflow-hidden"
+                                  style={{ background: 'var(--ios-bg-tertiary)' }}
+                                >
+                                  <div
+                                    className="h-full rounded-full transition-all duration-300"
+                                    style={{
+                                      width: `${st.solved === 0 ? 0 : Math.max(6, acc)}%`,
+                                      background:
+                                        acc >= 80
+                                          ? 'var(--ios-green)'
+                                          : acc >= 50
+                                          ? 'var(--ios-orange)'
+                                          : 'var(--ios-red)',
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {statSubMode === 'journal' && (
+                    <motion.div
+                      key="stats-journal"
+                      id="stats-journal-view"
+                      custom={statDirection}
+                      variants={iosScreenSlideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                    >
+                      <div className="ios-section-header">
+                        История завершённых тренировок и вариантов КИМ
+                      </div>
+                      <div id="session-journal-list" className="ios-inset-group !mb-0">
+                        {!state.sessionJournal || state.sessionJournal.length === 0 ? (
+                          <div
+                            className="p-6 text-center text-[13px]"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            Завершите любое занятие или вариант КИМ, чтобы запись появилась в
+                            журнале.
+                          </div>
+                        ) : (
+                          state.sessionJournal.map((j) => (
+                            <div key={j.id} className="ios-cell no-icon">
+                              <div className="flex-1 min-w-0 pr-2">
+                                <div className="text-[14px] font-bold truncate">
+                                  {j.title}
+                                </div>
+                                <div
+                                  className="text-[12px]"
+                                  style={{ color: 'var(--ios-label-sec)' }}
+                                >
+                                  {j.dateLabel} · Верно {j.correct} из {j.total}
+                                </div>
+                              </div>
+                              <div
+                                className="text-[15px] font-extrabold"
+                                style={{
+                                  color:
+                                    j.accuracy >= 80
+                                      ? 'var(--ios-green)'
+                                      : j.accuracy >= 50
+                                      ? 'var(--ios-orange)'
+                                      : 'var(--ios-red)',
+                                }}
+                              >
+                                {j.accuracy}%
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {statSubMode === 'cloud' && (
+                    <motion.div
+                      key="stats-cloud"
+                      id="stats-cloud-view"
+                      custom={statDirection}
+                      variants={iosScreenSlideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                    >
+                      <div className="ios-inset-group p-4 !mb-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="text-[15px] font-extrabold">
+                            Серверная и локальная память
+                          </div>
+                          <span
+                            className="text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                            style={{
+                              background: 'var(--ios-green-soft)',
+                              color: 'var(--ios-green)',
+                            }}
+                          >
+                            Автосохранение
+                          </span>
+                        </div>
+                        <p
+                          className="text-[12px] mb-3"
+                          style={{ color: 'var(--ios-label-sec)' }}
+                        >
+                          При хостинге на этом сервере ваш прогресс автоматически
+                          сохраняется в базе сервера и в браузере (IndexedDB +
+                          localStorage). Ниже доступен резервный код для переноса между
+                          устройствами.
+                        </p>
+                        <textarea
+                          id="cloud-code-textarea"
+                          rows={3}
+                          value={cloudCodeText}
+                          onChange={(e) => setCloudCodeText(e.target.value)}
+                          placeholder="Код прогресса EGE27-..."
+                          className="w-full p-2.5 rounded-2xl text-[13px] font-mono mb-2.5 outline-none"
+                          style={{
+                            background: 'var(--ios-bg-secondary)',
+                            border: '0.5px solid var(--ios-separator)',
+                            color: 'var(--ios-label)',
+                          }}
+                        />
+                        {cloudBannerMsg && (
+                          <div
+                            className="text-[12px] font-bold mb-2"
+                            style={{ color: 'var(--ios-green)' }}
+                          >
+                            {cloudBannerMsg}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            id="copy-cloud-code-btn"
+                            onClick={async () => {
+                              const fresh = encodeBackupCode(state);
+                              setCloudCodeText(fresh);
+                              try {
+                                await navigator.clipboard.writeText(fresh);
+                                setCloudBannerMsg('Код скопирован в буфер обмена!');
+                              } catch {
+                                setCloudBannerMsg('Выделите и скопируйте код выше');
+                              }
+                            }}
+                            className="ios-btn-tinted w-full"
+                          >
+                            Скопировать код
+                          </button>
+                          <button
+                            type="button"
+                            id="restore-cloud-code-btn"
+                            onClick={() => {
+                              const restored = decodeBackupCode(cloudCodeText, state);
+                              if (restored) {
+                                setState(restored);
+                                setCloudBannerMsg('Прогресс успешно восстановлен!');
+                              } else {
+                                setCloudBannerMsg('Ошибка: неверный формат кода EGE27-...');
+                              }
+                            }}
+                            className="ios-btn-tinted w-full"
+                            style={{
+                              background: 'var(--ios-green-soft)',
+                              color: 'var(--ios-green)',
+                            }}
+                          >
+                            Восстановить
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </motion.section>
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
+
+      {/* 5-Tab iOS 26 / 27 Draggable Spatial Liquid Glass Capsule Tab Bar */}
+      <LiquidGlassTabBar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        items={[
+          {
+            key: 'workout',
+            label: 'Занятие',
+            iconHref: '#sf-play-circle-fill',
+          },
+          {
+            key: 'sprint',
+            label: 'Спринт',
+            iconHref: '#sf-bolt-fill',
+          },
+          {
+            key: 'lab',
+            label: 'Лаб 9–15',
+            iconHref: '#sf-sparkles',
+          },
+          {
+            key: 'errors',
+            label: 'Ошибки',
+            iconHref: '#sf-warning-fill',
+            badgeCount: state.errorBank.length,
+          },
+          {
+            key: 'stats',
+            label: 'Статистика',
+            iconHref: '#sf-chart-fill',
+          },
+        ]}
+      />
+
+      {/* Window 1: Full Cheatsheet Modal (Шпаргалка по заданиям 9–13) */}
+      <CheatsheetModal
+        isOpen={isRulesOpen}
+        onClose={() => setIsRulesOpen(false)}
+        initialSection={rulesInitialSection}
+      />
+
+      {/* Window 2: Hosted Memory & Sync Modal */}
+      <SyncModal
+        isOpen={isSyncOpen}
+        onClose={() => setIsSyncOpen(false)}
+        state={state}
+        onRestoreState={(newState) => setState(newState)}
+      />
+
+      {/* Window 3: Smart Workout Presets & Focus Sheet */}
+      <PresetsModal
+        isOpen={isPresetsOpen}
+        onClose={() => setIsPresetsOpen(false)}
+        state={state}
+        onApplyPreset={handleApplyPreset}
+        onApplyCustomQuantities={handleApplyCustomQuantities}
+        onStartFipiTraps={handleStartFipiTrapsWorkout}
+        onStartWeakestTaskWorkout={handleStartWeakestTaskWorkout}
+        onStartRealKimWorkout={handleStartRealKimWorkout}
+      />
+
+      {/* Window 4: Instant Rule & Algorithm Inspector Sheet */}
+      <RuleInspectorModal
+        isOpen={isRuleInspectorOpen}
+        onClose={closeRuleInspector}
+        question={inspectedQuestion}
+        errorEntry={inspectedError}
+        onOpenFullCheatsheet={(taskId) => {
+          setRulesInitialSection(taskId);
+          setIsRulesOpen(true);
+        }}
+      />
+
+      {/* Window 5: Interactive Searchable FIPI Exceptions Dictionary Sheet */}
+      <DictionaryModal
+        isOpen={isDictionaryOpen}
+        onClose={() => setIsDictionaryOpen(false)}
+        onStartTrapsWorkout={handleStartFipiTrapsWorkout}
+      />
+
+      {/* Window 6: Apple Liquid Glass Physics & Theme Customization Sheet */}
+      <AppearanceModal
+        isOpen={isAppearanceOpen}
+        onClose={() => setIsAppearanceOpen(false)}
+        darkMode={state.darkMode}
+        onToggleDarkMode={(dark) => setState((prev) => ({ ...prev, darkMode: dark }))}
+        glassStyle={glassStyle}
+        onChangeGlassStyle={setGlassStyle}
+        specularEnabled={specularEnabled}
+        onToggleSpecular={setSpecularEnabled}
+        onOpenSyncModal={() => setIsSyncOpen(true)}
+      />
+
+      {/* Window 7: Reset Confirmation Sheet */}
+      <SwipeableSheet
+        id="reset-modal"
+        handleId="reset-drag-handle"
+        isOpen={isResetOpen}
+        onClose={() => setIsResetOpen(false)}
+        ariaLabel="Подтверждение сброса статистики"
+        handleAriaLabel="Потяните вниз, чтобы отменить сброс"
+        maxWidthClass="max-w-[420px]"
+      >
+        <h3 className="text-[19px] font-extrabold text-center mb-1">
+          Сбросить прогресс?
+        </h3>
+        <p
+          className="text-[13px] text-center mb-4"
+          style={{ color: 'var(--ios-label-sec)' }}
+        >
+          Вся статистика решённых заданий, журнал и Банк ошибок будут очищены.
+        </p>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            id="confirm-reset-btn"
+            onClick={handleConfirmResetStats}
+            className="ios-btn-primary"
+            style={{ background: 'var(--ios-red)' }}
+          >
+            Да, сбросить статистику
+          </button>
+          <button
+            type="button"
+            id="cancel-reset-btn"
+            onClick={() => setIsResetOpen(false)}
+            className="ios-btn-tinted w-full"
+          >
+            Отмена
+          </button>
+        </div>
+      </SwipeableSheet>
+    </>
+  );
+}

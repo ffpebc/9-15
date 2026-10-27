@@ -1206,7 +1206,7 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-1.5">
         <div className="min-w-0 flex-1 basis-[160px]">
           <div className="text-[15px] font-extrabold leading-snug break-words">
-            {isFipi5Row ? `Задание № ${task} (5 строк)` : wordTitle}
+            {isFipi5Row ? `Задание № ${task} · ФИПИ` : wordTitle}
           </div>
           {context && !isFipi5Row && (
             <div
@@ -1651,7 +1651,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
             className="text-[20px] sm:text-[23px] font-black leading-tight tracking-tight mb-1 break-words"
             style={{ color: 'var(--ios-label)' }}
           >
-            {solvedWordPreview || `Задание № ${task} (5 строк)`}
+            {solvedWordPreview || `Задание № ${task} · ФИПИ`}
           </div>
 
           {contextText && (
