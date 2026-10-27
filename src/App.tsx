@@ -2323,7 +2323,7 @@ export default function App() {
                                       >
                                         {kimActiveTask === '13' || kimActiveTask === '14'
                                           ? (row.isCorrectRow
-                                              ? `✓ Подходит: ${row.letter}`
+                                              ? `Подходит: ${row.letter}`
                                               : `Не подходит: ${row.letter}`)
                                           : (row.isCorrectRow
                                               ? `Подходит (буква ${row.letter})`

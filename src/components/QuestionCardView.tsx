@@ -325,7 +325,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                 <div className="flex-1 flex flex-col items-start min-w-0 text-left">
                   <div className="flex items-center gap-1.5 w-full">
                     <span className="font-extrabold text-[13px] shrink-0">
-                      {isCorrect ? '✓ Верно!' : '✕ Ошибка'}
+                      {isCorrect ? 'Верно' : 'Ошибка'}
                     </span>
                     <span className="opacity-90 font-bold text-[12px] truncate">
                       {isCorrect ? `Ответ: ${question.answer}` : `Правильно: ${question.answer}`}
@@ -660,10 +660,10 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                     >
                       {question.task === '13' || question.task === '14'
                         ? (row.isCorrectRow
-                            ? `✓ Подходит: ${row.letter}`
+                            ? `Подходит: ${row.letter}`
                             : `Не подходит: ${row.letter}`)
                         : (row.isCorrectRow
-                            ? `✓ Подходит: одна и та же буква «${row.letter}»`
+                            ? `Подходит: одна и та же буква «${row.letter}»`
                             : 'Разные буквы в ряду')}
                     </div>
                   )}
@@ -694,10 +694,10 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
               }}
             >
               {fipiResultOk ? (
-                <span>✓ Верно! Правильный ответ: <strong>{correctStr}</strong></span>
+                <span>Верно. Правильный ответ: <strong>{correctStr}</strong></span>
               ) : (
                 <span>
-                  ✕ Ошибка. Правильный ответ: <strong>{correctStr}</strong> (ваш выбор: <strong>{userStr || '—'}</strong>)
+                  Ошибка. Правильный ответ: <strong>{correctStr}</strong> (ваш выбор: <strong>{userStr || '—'}</strong>)
                 </span>
               )}
             </div>
