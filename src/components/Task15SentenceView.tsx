@@ -1,5 +1,5 @@
 import React from 'react';
-import { FipiRow } from '../utils/trainerLogic';
+import { FipiRow, resolveTask15Sentence } from '../utils/trainerLogic';
 
 export interface Task15SentenceViewProps {
   sentence: string;
@@ -19,35 +19,11 @@ export const Task15SentenceView: React.FC<Task15SentenceViewProps> = React.memo(
   className = '',
 }) => {
   const effectiveSentence = React.useMemo(() => {
-    let s = (sentence || '').trim();
-    s = s
-      .replace(/«\.\.\.—\s*«\.\.\./g, '')
-      .replace(/—\s*«\.\.\.[^»]*»*/g, '')
-      .replace(/—\s*«\.\.\..*$/, '')
-      .replace(/«\.\.\./g, '')
-      .replace(/\.\.\.»/g, '')
-      .replace(/[«»]/g, '')
-      .trim();
-
-    const testRe = /([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/;
-    if (!s || !testRe.test(s)) {
-      if (Array.isArray(rows) && rows.length > 0) {
-        const parts = rows.map((r, i) => {
-          const raw = r.words?.[0] || '';
-          const m = raw.match(/([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/);
-          if (m) return `${m[1]}(${m[2]})${m[3]}`;
-          const clean = raw.replace(/\s*—\s*.*$/, '').replace(/[«»]/g, '').trim();
-          return `${clean}(${i + 1})`;
-        });
-        return `В данном предложении пропущены буквы: ${parts.join(', ')}.`;
-      }
-      return 'Укажите цифры на месте пропусков в словах предложения.';
-    }
-    return s;
+    return resolveTask15Sentence({ sentence, rows });
   }, [sentence, rows]);
 
-  // Pattern matches words with gaps like: деревя(1)ая, письме(2)ый, etc.
-  const regex = /([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/g;
+  // Pattern matches words with gaps like: деревя(1)ая, письме(2)ый, по-особе(3)ому, etc.
+  const regex = /([А-Яа-яЁё-]+)\((\d+)\)([А-Яа-яЁё-]*)/g;
   const elements: React.ReactNode[] = [];
   let lastIdx = 0;
   let match: RegExpExecArray | null;
@@ -58,7 +34,7 @@ export const Task15SentenceView: React.FC<Task15SentenceViewProps> = React.memo(
     const [fullMatch, prefix, digitStr, suffix] = match;
     const digit = parseInt(digitStr, 10);
     const rowIdx = digit - 1;
-    const row = rows[rowIdx] || rows.find((_, i) => i === rowIdx);
+    const row = rows.find((r) => r.words.some((w) => w.includes(`(${digit})`))) || rows[rowIdx];
 
     // Append preceding plain text
     if (matchStart > lastIdx) {
@@ -100,6 +76,12 @@ export const Task15SentenceView: React.FC<Task15SentenceViewProps> = React.memo(
         className="inline-flex items-baseline align-baseline whitespace-nowrap font-bold cursor-pointer transition-transform"
         onClick={() => {
           if (!isSubmitted && onToggleDigit) {
+            onToggleDigit(digit);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (!isSubmitted && onToggleDigit && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
             onToggleDigit(digit);
           }
         }}

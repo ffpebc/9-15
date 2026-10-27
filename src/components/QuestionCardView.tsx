@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   TrainerQuestion,
+  cleanQuestionRule,
+  resolveTask15Sentence,
+  cleanWord,
+  cleanExplanation,
 } from '../utils/trainerLogic';
 import { classifyWordSubtopicAndException } from '../utils/wordClassifier';
 import { Task15SentenceView } from './Task15SentenceView';
@@ -14,70 +18,6 @@ const SHORT_MORPHEME_BY_TASK: Record<TrainerQuestion['task'], string> = {
   '14': 'Слитно / дефис / разд.',
   '15': 'Правописание Н / НН',
 };
-
-function cleanQuestionRule(rule: string | undefined, task: string): string {
-  if (!rule) {
-    if (task === '13') return 'Укажите варианты ответов, в которых НЕ с выделенным словом пишется РАЗДЕЛЬНО (или СЛИТНО).';
-    if (task === '15') return 'Укажите цифру(-ы), на месте которой(-ых) пишется НН (или Н).';
-    return 'Укажите варианты ответов, в которых во всех словах одного ряда пропущена одна и та же буква.';
-  }
-  let cleaned = rule.replace(/\s*Предложение:\s*«?.*$/is, '').trim();
-  cleaned = cleaned.replace(/«\.\.\.—\s*«\.\.\./g, '').replace(/—\s*«\.\.\.[^»]*»*/g, '').replace(/—\s*«\.\.\..*$/, '').replace(/[«»]/g, '').trim();
-  return cleaned || (task === '15' ? 'Укажите цифру(-ы), на месте которой(-ых) пишется НН (или Н).' : rule);
-}
-
-function resolveTask15Sentence(question: any): string {
-  let sent = ((question.instruction || question.sentence || '') as string).trim();
-
-  // If sentence is missing or empty, extract from rule if embedded
-  if (!sent && question.rule) {
-    const m = question.rule.match(/Предложение:\s*«?([^»]+)»?/i);
-    if (m && m[1]) {
-      sent = m[1].trim();
-    }
-  }
-
-  // Strip scraper artifacts
-  if (sent) {
-    sent = sent
-      .replace(/«\.\.\.—\s*«\.\.\./g, '')
-      .replace(/—\s*«\.\.\.[^»]*»*/g, '')
-      .replace(/—\s*«\.\.\..*$/, '')
-      .replace(/«\.\.\./g, '')
-      .replace(/\.\.\.»/g, '')
-      .replace(/[«»]/g, '')
-      .trim();
-  }
-
-  // Check if valid gaps with digits exist in the sentence
-  const hasGaps = /([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/.test(sent);
-
-  // If missing, corrupted or no digit gaps, reconstruct cleanly from question.rows
-  if (!sent || !hasGaps || sent.length < 15) {
-    if (Array.isArray(question.rows) && question.rows.length > 0) {
-      const parts = question.rows.map((r: any, i: number) => {
-        const raw = r.words?.[0] || '';
-        const m = raw.match(/([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/);
-        if (m) return `${m[1]}(${m[2]})${m[3]}`;
-        const clean = raw.replace(/\s*—\s*.*$/, '').replace(/[«»]/g, '').trim();
-        return `${clean}(${i + 1})`;
-      });
-      sent = `В данном предложении пропущены буквы: ${parts.join(', ')}.`;
-    }
-  }
-
-  return sent;
-}
-
-function cleanWordArtifacts(str: string): string {
-  if (!str) return '';
-  return str
-    .replace(/«\.\.\.—\s*«\.\.\./g, '')
-    .replace(/—\s*«\.\.\.[^»]*»*/g, '')
-    .replace(/\s*—\s*«?\.\.\..*$/, '')
-    .replace(/[«»]/g, '')
-    .trim();
-}
 
 interface QuestionCardViewProps {
   question: TrainerQuestion;
@@ -569,7 +509,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                 else if (!row.isCorrectRow && isSelected) rowState = 'bad';
               }
               const rawWord = fipiSubmitted ? row.solvedWords[0] : row.words[0];
-              const displayWord = cleanWordArtifacts(rawWord);
+              const displayWord = cleanWord(rawWord);
               return (
                 <button
                   key={rowNum}
@@ -611,7 +551,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                         className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
                         style={{ color: 'var(--ios-label-sec)' }}
                       >
-                        {cleanWordArtifacts(row.explanation)}
+                        {cleanExplanation(row.explanation)}
                       </div>
                     )}
                   </div>
@@ -652,7 +592,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                 </span>
                 <div className="flex-1 min-w-0 text-left">
                   <div className="text-[13px] font-bold leading-snug">
-                    {(fipiSubmitted ? row.solvedWords : row.words).map(cleanWordArtifacts).join(', ')}
+                    {(fipiSubmitted ? row.solvedWords : row.words).map(cleanWord).join(', ')}
                   </div>
                   {fipiSubmitted && (
                     <div
@@ -677,7 +617,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                       className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
                       style={{ color: 'var(--ios-label-sec)' }}
                     >
-                      {cleanWordArtifacts(row.explanation)}
+                      {cleanExplanation(row.explanation)}
                     </div>
                   )}
                 </div>
