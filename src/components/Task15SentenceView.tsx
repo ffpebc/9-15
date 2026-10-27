@@ -49,19 +49,19 @@ export const Task15SentenceView: React.FC<Task15SentenceViewProps> = React.memo(
     if (isSubmitted && row) {
       if (row.isCorrectRow && isSelected) {
         // User picked correctly
-        badgeClass += 'bg-[var(--ios-green-soft)] text-[var(--ios-green)] border border-[rgba(52,199,89,0.35)] shadow-xs';
-        badgeText = `${row.letter} (${digit})`;
+        badgeClass += 'bg-[var(--ios-green-soft)] text-[var(--ios-green)] border border-[rgba(52,199,89,0.4)] shadow-xs';
+        badgeText = `${row.letter} (${digit}) ✓`;
       } else if (row.isCorrectRow && !isSelected) {
         // Correct, but missed by user
-        badgeClass += 'bg-[var(--ios-orange-soft)] text-[var(--ios-orange)] border border-[rgba(255,149,0,0.35)]';
-        badgeText = `${row.letter} (${digit})`;
+        badgeClass += 'bg-[var(--ios-orange-soft)] text-[var(--ios-orange)] border border-[rgba(255,149,0,0.4)]';
+        badgeText = `${row.letter} (${digit}) !`;
       } else if (!row.isCorrectRow && isSelected) {
         // Wrongly picked
-        badgeClass += 'bg-[var(--ios-red-soft)] text-[var(--ios-red)] border border-[rgba(255,59,48,0.35)]';
-        badgeText = `${row.letter} (${digit})`;
+        badgeClass += 'bg-[var(--ios-red-soft)] text-[var(--ios-red)] border border-[rgba(255,59,48,0.4)]';
+        badgeText = `${row.letter} (${digit}) ✕`;
       } else {
         // Correctly not picked
-        badgeClass += 'bg-[var(--ios-bg-tertiary)] text-[var(--ios-label-sec)] border border-transparent opacity-75';
+        badgeClass += 'bg-[var(--ios-bg-tertiary)] text-[var(--ios-label-sec)] border border-transparent opacity-80';
         badgeText = `${row.letter} (${digit})`;
       }
     } else if (isSelected) {
