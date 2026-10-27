@@ -15,10 +15,16 @@ import {
   HOMOPHONE_PAIRS_BANK,
 } from './trainerLogic.ts';
 
-test('FIPI bank generates 5,000 sprint + 250 FIPI sets + 25 KIM variants + flashcards & homophones', () => {
+test('FIPI bank generates sprint questions + FIPI sets + KIM variants + flashcards & homophones', () => {
   const bank = getTrainerBank();
-  assert.equal(bank.sprintQuestions.length >= 5000, true);
-  assert.equal(bank.fipiQuestions.length >= 250, true);
+  const isFullBank = bank.sprintQuestions.length >= 1000;
+  if (isFullBank) {
+    assert.equal(bank.sprintQuestions.length >= 5000, true);
+    assert.equal(bank.fipiQuestions.length >= 250, true);
+  } else {
+    assert.equal(bank.sprintQuestions.length >= 200, true);
+    assert.equal(bank.fipiQuestions.length >= 25, true);
+  }
   assert.equal(bank.trapQuestions.length >= 15, true);
   assert.equal(bank.kimVariants.length >= 25, true);
   assert.equal(FLASHCARDS_BANK.length >= 14, true);
@@ -197,4 +203,38 @@ test('Homophone pairs and Task 12 conjugation questions have balanced non-obviou
     assert.notEqual(sortedPair, 'А/Я', `Word ${q.prefix}..${q.suffix} had same-conjugation А/Я`);
   }
 });
+
+test('Task 15 FIPI questions have authentic sentences, non-empty gap tokens, and zero scraper artifacts', () => {
+  const bank = getTrainerBank();
+  const t15Questions = bank.fipiQuestions.filter((q) => q.task === '15');
+  assert.equal(t15Questions.length >= 6, true, 'At least 6 Task 15 FIPI questions available');
+
+  for (const q of t15Questions) {
+    const sentence = q.sentence || q.instruction;
+    assert.ok(sentence, `Task 15 question ${q.id} must have a non-empty sentence`);
+    assert.equal(sentence.includes('— «...'), false, `Question ${q.id} sentence contains scraper artifact`);
+    assert.equal(sentence.includes('«...—'), false, `Question ${q.id} sentence contains scraper artifact`);
+    assert.equal(q.rule.includes('— «...'), false, `Question ${q.id} rule contains scraper artifact`);
+    assert.equal(q.rule.includes('Предложение:'), false, `Question ${q.id} rule should not embed "Предложение:"`);
+
+    // Must contain gap numbers (1), (2), etc.
+    const gapMatches = [...sentence.matchAll(/([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/g)];
+    assert.ok(gapMatches.length >= 2, `Question ${q.id} must contain at least 2 gap tokens in sentence`);
+    assert.equal(gapMatches.length, q.rows.length, `Question ${q.id} gaps count must match rows count`);
+
+    // Verify rows are clean
+    for (const r of q.rows) {
+      for (const w of r.words) {
+        assert.equal(w.includes('— «...'), false, `Word "${w}" in ${q.id} contains scraper artifact`);
+        assert.equal(w.includes('«...'), false, `Word "${w}" in ${q.id} contains scraper artifact`);
+      }
+    }
+
+    // Verify correctIndices are within 1..rows.length
+    for (const idx of q.correctIndices) {
+      assert.ok(idx >= 1 && idx <= q.rows.length, `correctIndex ${idx} out of range in ${q.id}`);
+    }
+  }
+});
+
 

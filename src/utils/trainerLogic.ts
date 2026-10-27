@@ -44,6 +44,7 @@ export interface FipiQuestion {
   topic: string;
   rule: string;
   instruction?: string;
+  sentence?: string;
   source?: string;
   rows: FipiRow[];
   correctIndices: number[]; // 1-based indices (e.g., [1, 3])
@@ -2326,9 +2327,48 @@ export function getTrainerBank() {
   const seenFipiSignatures = new Set<string>();
   const wordsInAuthenticFipi = new Set<string>();
 
+  const cleanScraper = (text: string | undefined): string => {
+    if (!text) return '';
+    return text
+      .replace(/«\.\.\.—\s*«\.\.\./g, '')
+      .replace(/—\s*«\.\.\.[^»]*»*/g, '')
+      .replace(/—\s*«\.\.\..*$/, '')
+      .replace(/«\.\.\./g, '')
+      .replace(/\.\.\.»/g, '')
+      .replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '')
+      .trim();
+  };
+
   // 1. Add authentic whole tasks from FIPI 2026-2027 demo and Shkolkovo (strictly deduplicated)
   if (Array.isArray(PARSED_FIPI_QUESTIONS)) {
-    for (const fq of PARSED_FIPI_QUESTIONS) {
+    for (const rawFq of PARSED_FIPI_QUESTIONS) {
+      let rule = cleanScraper(rawFq.rule);
+      let sentence = cleanScraper(rawFq.sentence || (rawFq as any).instruction);
+      if (!sentence && rule.includes('Предложение:')) {
+        const m = rule.match(/Предложение:\s*«?([^»]+)»?/i);
+        if (m && m[1]) {
+          sentence = cleanScraper(m[1]);
+        }
+      }
+      if (rule.includes('Предложение:')) {
+        rule = rule.replace(/\s*Предложение:\s*«?.*$/is, '').trim();
+      }
+
+      const rows: FipiRow[] = rawFq.rows.map((r) => ({
+        ...r,
+        words: r.words.map((w) => cleanScraper(w)),
+        solvedWords: r.solvedWords.map((w) => cleanScraper(w)),
+        explanation: cleanScraper(r.explanation),
+      }));
+
+      const fq: FipiQuestion = {
+        ...rawFq,
+        rule,
+        instruction: sentence || rawFq.instruction,
+        sentence: sentence || (rawFq as any).sentence,
+        rows,
+      };
+
       const sig = fq.rows.map((r) => r.words.join('|')).join('||');
       if (seenFipiSignatures.has(sig)) continue;
       seenFipiSignatures.add(sig);
@@ -2354,13 +2394,17 @@ export function getTrainerBank() {
       if (seenSprintKeys.has(stemKey)) continue;
       seenSprintKeys.add(stemKey);
 
+      const cleanedContext = cleanScraper(rawSq.context);
+      const cleanedRule = cleanScraper(rawSq.rule);
+      const cleanedExplanation = cleanScraper(rawSq.explanation);
+
       const classified = classifyWordSubtopicAndException(
         rawSq.task,
         rawSq.prefix,
         rawSq.suffix,
         rawSq.answer,
-        rawSq.explanation || rawSq.rule,
-        rawSq.context,
+        cleanedExplanation || cleanedRule,
+        cleanedContext,
         Boolean(rawSq.isTrap)
       );
 
@@ -2373,8 +2417,10 @@ export function getTrainerBank() {
       const isTrap = Boolean(rawSq.isTrap || classified.isTrap);
       const sq: SprintQuestion = {
         ...rawSq,
+        context: cleanedContext,
+        explanation: cleanedExplanation,
         topic: classified.topic,
-        rule: classified.rule || rawSq.rule,
+        rule: classified.rule || cleanedRule,
         isTrap,
         options: orderOptionsDeterministically(smartBaseOpts, rawSq.answer, sprintQuestions.length),
       };
@@ -2445,6 +2491,9 @@ export function getTrainerBank() {
 
   // 4. Build additional non-overlapping 5-row FIPI tasks from the full unique sprintQuestions pool
   for (const task of TASK_IDS) {
+    // Task 15 is strictly authentic sentence questions with numbered gap badges; never synthesize artificial 5x3 row questions
+    if (task === '15') continue;
+
     const taskGroups = COMPACT_GROUPS.filter((g) => g.task === task);
     const taskSprintItems = sprintQuestions.filter((sq) => sq.task === task);
 

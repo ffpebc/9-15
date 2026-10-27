@@ -18,7 +18,33 @@ export const Task15SentenceView: React.FC<Task15SentenceViewProps> = React.memo(
   onToggleDigit,
   className = '',
 }) => {
-  if (!sentence) return null;
+  const effectiveSentence = React.useMemo(() => {
+    let s = (sentence || '').trim();
+    s = s
+      .replace(/«\.\.\.—\s*«\.\.\./g, '')
+      .replace(/—\s*«\.\.\.[^»]*»*/g, '')
+      .replace(/—\s*«\.\.\..*$/, '')
+      .replace(/«\.\.\./g, '')
+      .replace(/\.\.\.»/g, '')
+      .replace(/[«»]/g, '')
+      .trim();
+
+    const testRe = /([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/;
+    if (!s || !testRe.test(s)) {
+      if (Array.isArray(rows) && rows.length > 0) {
+        const parts = rows.map((r, i) => {
+          const raw = r.words?.[0] || '';
+          const m = raw.match(/([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/);
+          if (m) return `${m[1]}(${m[2]})${m[3]}`;
+          const clean = raw.replace(/\s*—\s*.*$/, '').replace(/[«»]/g, '').trim();
+          return `${clean}(${i + 1})`;
+        });
+        return `В данном предложении пропущены буквы: ${parts.join(', ')}.`;
+      }
+      return 'Укажите цифры на месте пропусков в словах предложения.';
+    }
+    return s;
+  }, [sentence, rows]);
 
   // Pattern matches words with gaps like: деревя(1)ая, письме(2)ый, etc.
   const regex = /([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/g;
@@ -26,17 +52,17 @@ export const Task15SentenceView: React.FC<Task15SentenceViewProps> = React.memo(
   let lastIdx = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(sentence)) !== null) {
+  while ((match = regex.exec(effectiveSentence)) !== null) {
     const matchStart = match.index;
     const matchEnd = regex.lastIndex;
     const [fullMatch, prefix, digitStr, suffix] = match;
     const digit = parseInt(digitStr, 10);
     const rowIdx = digit - 1;
-    const row = rows[rowIdx];
+    const row = rows[rowIdx] || rows.find((_, i) => i === rowIdx);
 
     // Append preceding plain text
     if (matchStart > lastIdx) {
-      elements.push(sentence.slice(lastIdx, matchStart));
+      elements.push(effectiveSentence.slice(lastIdx, matchStart));
     }
 
     const isSelected = selectedDigits.includes(digit);
@@ -91,8 +117,8 @@ export const Task15SentenceView: React.FC<Task15SentenceViewProps> = React.memo(
   }
 
   // Append trailing plain text
-  if (lastIdx < sentence.length) {
-    elements.push(sentence.slice(lastIdx));
+  if (lastIdx < effectiveSentence.length) {
+    elements.push(effectiveSentence.slice(lastIdx));
   }
 
   return (

@@ -15,7 +15,7 @@ import os
 import sys
 
 def clean_sentence(text):
-    s = text.replace('украше(З)ые', 'украше(3)ые')
+    s = text.replace('(З)', '(3)').replace('(з)', '(3)').replace('украше(З)ые', 'украше(3)ые').replace('ю(З)ая', 'ю(3)ая')
     s = re.sub(r'[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]', '', s)
     s = s.replace('&laquo;', '«').replace('&raquo;', '»').replace('&mdash;', '—')
     s = s.replace('&#39;', "'").replace('&quot;', '"').replace('&nbsp;', ' ')
@@ -75,7 +75,8 @@ def explain_task15_word(prefix, letter, solved, digit, sentence):
 
 def build_authentic_task15_questions():
     # Load raw task 15 from commit 432f74b
-    cmd = ['git', 'show', '432f74b:src/data/fipiTasksBank9_15.json']
+    repo_dir = '/tmp/gh/repo' if os.path.exists('/tmp/gh/repo/.git') else '.'
+    cmd = ['git', '-C', repo_dir, 'show', '432f74b:src/data/fipiTasksBank9_15.json']
     raw_bytes = subprocess.check_output(cmd)
     raw_data = json.loads(raw_bytes)
 
@@ -168,7 +169,7 @@ def main():
     # 2. Save full bank to /tmp/fipi_full_t15.json for injection into data branch
     fipi_full_path = '/tmp/fipiTasksBank9_15_updated.json'
     # Get existing 9-14 from data branch
-    cmd = ['git', 'show', 'data:public/data/fipiTasksBank9_15.json']
+    cmd = ['git', '-C', repo_root, 'show', 'data:public/data/fipiTasksBank9_15.json']
     raw_bytes = subprocess.check_output(cmd)
     data_branch_fipi = json.loads(raw_bytes)
 
@@ -177,8 +178,14 @@ def main():
     print(f'Total FIPI questions combining tasks 9-14 ({len(filtered_fipi)}) + task 15 ({len(authentic_t15)}): {len(all_fipi)}')
 
     with open(fipi_full_path, 'w', encoding='utf-8') as f:
-        json.dump(all_fipi, f, ensure_ascii=False, indent=2)
+        json.dump(all_fipi, f, ensure_ascii=False, separators=(',', ':'))
     print(f'Saved updated full FIPI bank to {fipi_full_path}')
+
+    for target in ['public/data/fipiTasksBank9_15.json', 'src/data/fipiTasksBank9_15.json']:
+        if os.path.exists(os.path.dirname(target)):
+            with open(target, 'w', encoding='utf-8') as f:
+                json.dump(all_fipi, f, ensure_ascii=False, separators=(',', ':'))
+            print(f'Updated {target}')
 
 if __name__ == '__main__':
     main()
