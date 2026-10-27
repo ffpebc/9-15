@@ -497,67 +497,122 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
             />
           </div>
 
-          {/* Numbered Word Cards (selectable / feedback states) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {question.rows.map((row, idx) => {
-              const rowNum = idx + 1;
-              const isSelected = fipiSelectedRows.includes(rowNum);
-              let rowState = isSelected ? 'selected' : '';
-              if (fipiSubmitted) {
-                if (row.isCorrectRow && isSelected) rowState = 'ok';
-                else if (row.isCorrectRow && !isSelected) rowState = 'missed';
-                else if (!row.isCorrectRow && isSelected) rowState = 'bad';
-              }
-              const rawWord = fipiSubmitted ? row.solvedWords[0] : row.words[0];
-              const displayWord = cleanWord(rawWord);
-              return (
-                <button
-                  key={rowNum}
-                  id={`fipi-row-${rowNum}`}
-                  type="button"
-                  disabled={fipiSubmitted}
-                  onClick={() => toggleRow(rowNum)}
-                  className={`fipi-row-cell ${rowState}`}
-                >
-                  <span
-                    className="w-6 h-6 rounded-full text-[12px] font-extrabold flex items-center justify-center shrink-0"
-                    style={{
-                      background: isSelected ? 'var(--ios-blue)' : 'var(--ios-bg-tertiary)',
-                      color: isSelected ? '#FFFFFF' : 'var(--ios-label)',
-                    }}
+          {/* Task 15 Pure Digits (Round Circular Buttons 1, 2, 3, 4, 5 without words) */}
+          <div className="flex flex-col gap-2 my-1">
+            <div
+              className="text-[11px] font-bold text-center uppercase tracking-wider opacity-65"
+              style={{ color: 'var(--ios-label-sec)' }}
+            >
+              {fipiSubmitted ? 'Результат по номерам пропусков:' : 'Выберите цифры ответа:'}
+            </div>
+
+            <div className="flex items-center justify-center gap-3 sm:gap-4 my-1 w-full max-w-sm mx-auto">
+              {question.rows.map((row, idx) => {
+                const digit = idx + 1;
+                const isSelected = fipiSelectedRows.includes(digit);
+                let circleClass = 'w-12 h-12 sm:w-14 sm:h-14 rounded-full text-[19px] sm:text-[21px] font-black flex items-center justify-center transition-all select-none shadow-xs active:scale-95 cursor-pointer';
+                let circleStyle: React.CSSProperties = {
+                  background: 'var(--ios-bg-secondary)',
+                  color: 'var(--ios-label)',
+                  border: '1.5px solid var(--ios-separator)',
+                };
+
+                if (fipiSubmitted) {
+                  if (row.isCorrectRow && isSelected) {
+                    circleStyle = {
+                      background: 'var(--ios-green-soft)',
+                      color: 'var(--ios-green)',
+                      border: '2px solid var(--ios-green)',
+                    };
+                  } else if (row.isCorrectRow && !isSelected) {
+                    circleStyle = {
+                      background: 'var(--ios-orange-soft)',
+                      color: 'var(--ios-orange)',
+                      border: '1.5px solid var(--ios-orange)',
+                    };
+                  } else if (!row.isCorrectRow && isSelected) {
+                    circleStyle = {
+                      background: 'var(--ios-red-soft)',
+                      color: 'var(--ios-red)',
+                      border: '2px solid var(--ios-red)',
+                    };
+                  } else {
+                    circleStyle = {
+                      background: 'var(--ios-bg-secondary)',
+                      color: 'var(--ios-label-sec)',
+                      border: '1px solid var(--ios-separator)',
+                      opacity: 0.45,
+                    };
+                  }
+                } else if (isSelected) {
+                  circleStyle = {
+                    background: 'var(--ios-blue)',
+                    color: '#FFFFFF',
+                    border: '2px solid var(--ios-blue)',
+                    boxShadow: '0 4px 14px rgba(0, 122, 255, 0.35)',
+                  };
+                  circleClass += ' scale-105';
+                }
+
+                return (
+                  <button
+                    key={digit}
+                    id={`fipi-row-${digit}`}
+                    type="button"
+                    disabled={fipiSubmitted}
+                    onClick={() => toggleRow(digit)}
+                    className={circleClass}
+                    style={circleStyle}
+                    aria-label={`Цифра ${digit}${isSelected ? ' (выбрана)' : ''}`}
                   >
-                    {rowNum}
-                  </span>
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="text-[13px] font-bold leading-snug">
-                      {displayWord}
+                    <span>{digit}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Explanations shown only AFTER answer submission */}
+            {fipiSubmitted && (
+              <div className="flex flex-col gap-1.5 mt-2 text-left">
+                {question.rows.map((row, idx) => {
+                  const digit = idx + 1;
+                  const solvedWord = cleanWord(row.solvedWords[0] || row.words[0]);
+                  return (
+                    <div
+                      key={digit}
+                      className="p-2.5 rounded-2xl border border-[var(--ios-separator)] text-[12px]"
+                      style={{ background: 'var(--ios-bg-secondary)' }}
+                    >
+                      <div className="flex items-center gap-2 font-bold mb-0.5">
+                        <span
+                          className="w-5 h-5 rounded-full text-[11px] font-extrabold flex items-center justify-center shrink-0"
+                          style={{
+                            background: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-bg-tertiary)',
+                            color: row.isCorrectRow ? '#fff' : 'var(--ios-label-sec)',
+                          }}
+                        >
+                          {digit}
+                        </span>
+                        <span className="font-extrabold" style={{ color: 'var(--ios-label)' }}>
+                          {solvedWord}
+                        </span>
+                        <span
+                          className="text-[11px] ml-auto font-semibold"
+                          style={{ color: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-label-sec)' }}
+                        >
+                          {`пишется «${row.letter}»`}
+                        </span>
+                      </div>
+                      {row.explanation && (
+                        <div className="text-[11px] opacity-85 leading-snug pl-7" style={{ color: 'var(--ios-label-sec)' }}>
+                          {cleanExplanation(row.explanation)}
+                        </div>
+                      )}
                     </div>
-                    {fipiSubmitted && (
-                      <div
-                        className="text-[11px] mt-0.5 truncate font-semibold"
-                        style={{
-                          color: row.isCorrectRow
-                            ? 'var(--ios-green)'
-                            : 'var(--ios-label-sec)',
-                        }}
-                      >
-                        {row.isCorrectRow
-                          ? `✓ Подходит: пишется «${row.letter}»`
-                          : `Не подходит: пишется «${row.letter}»`}
-                      </div>
-                    )}
-                    {fipiSubmitted && row.explanation && (
-                      <div
-                        className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
-                        style={{ color: 'var(--ios-label-sec)' }}
-                      >
-                        {cleanExplanation(row.explanation)}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       ) : (

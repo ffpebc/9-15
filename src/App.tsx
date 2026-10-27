@@ -26,6 +26,8 @@ import {
   applyAnswerToState,
   encodeBackupCode,
   decodeBackupCode,
+  cleanWord,
+  cleanExplanation,
 } from './utils/trainerLogic';
 import {
   loadInitialStateSync,
@@ -2154,80 +2156,194 @@ export default function App() {
                           </div>
                         )}
 
-                        <div className="flex flex-col gap-1.5">
-                          {currentKimTaskQuestion.rows.map((row, idx) => {
-                            const rowNum = idx + 1;
-                            const isPicked = (kimAnswers[kimActiveTask] || '').includes(
-                              String(rowNum)
-                            );
-                            let rowStateClass = isPicked ? 'selected' : '';
-                            if (kimChecked) {
-                              if (row.isCorrectRow && isPicked) rowStateClass = 'ok';
-                              else if (row.isCorrectRow && !isPicked)
-                                rowStateClass = 'missed';
-                              else if (!row.isCorrectRow && isPicked)
-                                rowStateClass = 'bad';
-                            }
+                        {kimActiveTask === '15' ? (
+                          <div className="flex flex-col gap-2 my-1">
+                            <div
+                              className="text-[11px] font-bold text-center uppercase tracking-wider opacity-65"
+                              style={{ color: 'var(--ios-label-sec)' }}
+                            >
+                              {kimChecked ? 'Результат по номерам пропусков:' : 'Выберите цифры ответа:'}
+                            </div>
 
-                            const displayWords = kimChecked ? row.solvedWords : row.words;
+                            <div className="flex items-center justify-center gap-3 sm:gap-4 my-1 w-full max-w-sm mx-auto">
+                              {currentKimTaskQuestion.rows.map((row, idx) => {
+                                const digit = idx + 1;
+                                const isPicked = (kimAnswers['15'] || '').includes(String(digit));
+                                let circleClass = 'w-12 h-12 sm:w-14 sm:h-14 rounded-full text-[19px] sm:text-[21px] font-black flex items-center justify-center transition-all select-none shadow-xs active:scale-95 cursor-pointer';
+                                let circleStyle: React.CSSProperties = {
+                                  background: 'var(--ios-bg-secondary)',
+                                  color: 'var(--ios-label)',
+                                  border: '1.5px solid var(--ios-separator)',
+                                };
 
-                            return (
-                              <button
-                                key={rowNum}
-                                type="button"
-                                onClick={() => handleToggleKimRowDigit(rowNum)}
-                                className={`fipi-row-cell ${rowStateClass}`}
-                              >
-                                <div
-                                  className="w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-extrabold shrink-0"
-                                  style={{
-                                    background: isPicked
-                                      ? 'var(--ios-blue)'
-                                      : 'var(--ios-bg-tertiary)',
-                                    color: isPicked ? '#FFFFFF' : 'var(--ios-label)',
-                                  }}
+                                if (kimChecked) {
+                                  if (row.isCorrectRow && isPicked) {
+                                    circleStyle = {
+                                      background: 'var(--ios-green-soft)',
+                                      color: 'var(--ios-green)',
+                                      border: '2px solid var(--ios-green)',
+                                    };
+                                  } else if (row.isCorrectRow && !isPicked) {
+                                    circleStyle = {
+                                      background: 'var(--ios-orange-soft)',
+                                      color: 'var(--ios-orange)',
+                                      border: '1.5px solid var(--ios-orange)',
+                                    };
+                                  } else if (!row.isCorrectRow && isPicked) {
+                                    circleStyle = {
+                                      background: 'var(--ios-red-soft)',
+                                      color: 'var(--ios-red)',
+                                      border: '2px solid var(--ios-red)',
+                                    };
+                                  } else {
+                                    circleStyle = {
+                                      background: 'var(--ios-bg-secondary)',
+                                      color: 'var(--ios-label-sec)',
+                                      border: '1px solid var(--ios-separator)',
+                                      opacity: 0.45,
+                                    };
+                                  }
+                                } else if (isPicked) {
+                                  circleStyle = {
+                                    background: 'var(--ios-blue)',
+                                    color: '#FFFFFF',
+                                    border: '2px solid var(--ios-blue)',
+                                    boxShadow: '0 4px 14px rgba(0, 122, 255, 0.35)',
+                                  };
+                                  circleClass += ' scale-105';
+                                }
+
+                                return (
+                                  <button
+                                    key={digit}
+                                    id={`kim-row-${digit}`}
+                                    type="button"
+                                    onClick={() => handleToggleKimRowDigit(digit)}
+                                    className={circleClass}
+                                    style={circleStyle}
+                                    aria-label={`Цифра ${digit}${isPicked ? ' (выбрана)' : ''}`}
+                                  >
+                                    <span>{digit}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Explanations shown only AFTER checking KIM */}
+                            {kimChecked && (
+                              <div className="flex flex-col gap-1.5 mt-2 text-left">
+                                {currentKimTaskQuestion.rows.map((row, idx) => {
+                                  const digit = idx + 1;
+                                  const solvedWord = cleanWord(row.solvedWords[0] || row.words[0]);
+                                  return (
+                                    <div
+                                      key={digit}
+                                      className="p-2.5 rounded-2xl border border-[var(--ios-separator)] text-[12px]"
+                                      style={{ background: 'var(--ios-bg-secondary)' }}
+                                    >
+                                      <div className="flex items-center gap-2 font-bold mb-0.5">
+                                        <span
+                                          className="w-5 h-5 rounded-full text-[11px] font-extrabold flex items-center justify-center shrink-0"
+                                          style={{
+                                            background: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-bg-tertiary)',
+                                            color: row.isCorrectRow ? '#fff' : 'var(--ios-label-sec)',
+                                          }}
+                                        >
+                                          {digit}
+                                        </span>
+                                        <span className="font-extrabold" style={{ color: 'var(--ios-label)' }}>
+                                          {solvedWord}
+                                        </span>
+                                        <span
+                                          className="text-[11px] ml-auto font-semibold"
+                                          style={{ color: row.isCorrectRow ? 'var(--ios-green)' : 'var(--ios-label-sec)' }}
+                                        >
+                                          {`пишется «${row.letter}»`}
+                                        </span>
+                                      </div>
+                                      {row.explanation && (
+                                        <div className="text-[11px] opacity-85 leading-snug pl-7" style={{ color: 'var(--ios-label-sec)' }}>
+                                          {cleanExplanation(row.explanation)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            {currentKimTaskQuestion.rows.map((row, idx) => {
+                              const rowNum = idx + 1;
+                              const isPicked = (kimAnswers[kimActiveTask] || '').includes(
+                                String(rowNum)
+                              );
+                              let rowStateClass = isPicked ? 'selected' : '';
+                              if (kimChecked) {
+                                if (row.isCorrectRow && isPicked) rowStateClass = 'ok';
+                                else if (row.isCorrectRow && !isPicked)
+                                  rowStateClass = 'missed';
+                                else if (!row.isCorrectRow && isPicked)
+                                  rowStateClass = 'bad';
+                              }
+
+                              const displayWords = kimChecked ? row.solvedWords : row.words;
+
+                              return (
+                                <button
+                                  key={rowNum}
+                                  type="button"
+                                  onClick={() => handleToggleKimRowDigit(rowNum)}
+                                  className={`fipi-row-cell ${rowStateClass}`}
                                 >
-                                  {rowNum}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[13px] font-bold leading-snug">
-                                    {displayWords.join(', ')}
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-extrabold shrink-0"
+                                    style={{
+                                      background: isPicked
+                                        ? 'var(--ios-blue)'
+                                        : 'var(--ios-bg-tertiary)',
+                                      color: isPicked ? '#FFFFFF' : 'var(--ios-label)',
+                                    }}
+                                  >
+                                    {rowNum}
                                   </div>
-                                  {kimChecked && (
-                                    <div
-                                      className="text-[11px] font-semibold mt-0.5 truncate"
-                                      style={{
-                                        color: row.isCorrectRow
-                                          ? 'var(--ios-green)'
-                                          : 'var(--ios-label-sec)',
-                                      }}
-                                    >
-                                      {kimActiveTask === '15'
-                                        ? (row.isCorrectRow
-                                            ? `✓ Подходит: пишется «${row.letter}»`
-                                            : `Не подходит: пишется «${row.letter}»`)
-                                        : kimActiveTask === '13' || kimActiveTask === '14'
-                                        ? (row.isCorrectRow
-                                            ? `✓ Подходит: ${row.letter}`
-                                            : `Не подходит: ${row.letter}`)
-                                        : (row.isCorrectRow
-                                            ? `Подходит (буква ${row.letter})`
-                                            : 'Разные буквы в ряду')}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-[13px] font-bold leading-snug">
+                                      {displayWords.join(', ')}
                                     </div>
-                                  )}
-                                  {kimChecked && row.explanation && (
-                                    <div
-                                      className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
-                                      style={{ color: 'var(--ios-label-sec)' }}
-                                    >
-                                      {row.explanation}
-                                    </div>
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
+                                    {kimChecked && (
+                                      <div
+                                        className="text-[11px] font-semibold mt-0.5 truncate"
+                                        style={{
+                                          color: row.isCorrectRow
+                                            ? 'var(--ios-green)'
+                                            : 'var(--ios-label-sec)',
+                                        }}
+                                      >
+                                        {kimActiveTask === '13' || kimActiveTask === '14'
+                                          ? (row.isCorrectRow
+                                              ? `✓ Подходит: ${row.letter}`
+                                              : `Не подходит: ${row.letter}`)
+                                          : (row.isCorrectRow
+                                              ? `Подходит (буква ${row.letter})`
+                                              : 'Разные буквы в ряду')}
+                                      </div>
+                                    )}
+                                    {kimChecked && row.explanation && (
+                                      <div
+                                        className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
+                                        style={{ color: 'var(--ios-label-sec)' }}
+                                      >
+                                        {row.explanation}
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
 
                         {kimChecked && (
                           <div
