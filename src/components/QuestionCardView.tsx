@@ -8,6 +8,7 @@ import {
 } from '../utils/trainerLogic';
 import { classifyWordSubtopicAndException } from '../utils/wordClassifier';
 import { Task15SentenceView } from './Task15SentenceView';
+import { FormattedInstruction } from './FormattedInstruction';
 
 const SHORT_MORPHEME_BY_TASK: Record<TrainerQuestion['task'], string> = {
   '9': 'Корень слова',
@@ -463,11 +464,11 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
 
       {/* Official Instruction Box (especially for Task 13 and Task 15) */}
       <div
-        className="text-[12px] font-medium px-3 py-2 rounded-xl text-left leading-snug border border-[var(--ios-separator)] shadow-xs"
+        className="px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl text-left border border-[var(--ios-separator)] shadow-xs"
         style={{ background: 'var(--ios-bg-secondary)', color: 'var(--ios-label)' }}
       >
-        <div className="text-[12px] font-semibold leading-snug">
-          {cleanQuestionRule(question.rule, question.task)}
+        <div className="text-[14.5px] sm:text-[16px] font-semibold leading-relaxed">
+          <FormattedInstruction rule={question.rule} task={question.task} />
         </div>
       </div>
 

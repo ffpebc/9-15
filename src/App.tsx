@@ -40,6 +40,7 @@ import { CheatsheetModal } from './components/CheatsheetModal';
 import { SyncModal } from './components/SyncModal';
 import { QuestionCardView } from './components/QuestionCardView';
 import { Task15SentenceView } from './components/Task15SentenceView';
+import { FormattedInstruction } from './components/FormattedInstruction';
 import {
   PresetsModal,
   RuleInspectorModal,
@@ -2099,14 +2100,8 @@ export default function App() {
                                 onClick={() => openRuleInspector(currentKimTaskQuestion, null)}
                                 className="liquid-pill-btn text-[10.5px] font-bold px-2 py-0.5 rounded-full cursor-pointer shrink-0"
                               >
-                                Правило ?
+                                Шпора ({TASK_META[kimActiveTask].cheatPages})
                               </button>
-                            </div>
-                            <div
-                              className="text-[11px] leading-snug mt-0.5"
-                              style={{ color: 'var(--ios-label-sec)' }}
-                            >
-                              {currentKimTaskQuestion.rule} ({TASK_META[kimActiveTask].cheatPages})
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -2128,6 +2123,16 @@ export default function App() {
                               aria-label={`Ответ бланка для задания ${kimActiveTask}`}
                               className="ege-blank-input"
                             />
+                          </div>
+                        </div>
+
+                        {/* Official Instruction Box in KIM */}
+                        <div
+                          className="px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl mb-2.5 text-left border border-[var(--ios-separator)] shadow-xs"
+                          style={{ background: 'var(--ios-bg-secondary)', color: 'var(--ios-label)' }}
+                        >
+                          <div className="text-[14.5px] sm:text-[16px] font-semibold leading-relaxed">
+                            <FormattedInstruction rule={currentKimTaskQuestion.rule} task={kimActiveTask} />
                           </div>
                         </div>
 
