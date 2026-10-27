@@ -1137,8 +1137,8 @@ for (const t of cleanFipiInput) {
       const wordExp = isolateOrGenerateWordExplanation("15", it.pref, it.suff, ans, rawExp, "");
 
       newRows.push({
-        words: [`${displayGapWord} — «...${snippet}...»`],
-        solvedWords: [`${displaySolvedWord} — «...${snippet.replace(it.fullMatch, displaySolvedWord)}...»`],
+        words: [displayGapWord],
+        solvedWords: [displaySolvedWord],
         letter: ans,
         isCorrectRow: inCorr,
         explanation: wordExp,
@@ -1163,7 +1163,9 @@ for (const t of cleanFipiInput) {
     if (newRows.length >= 2 && validCorrIndices.length >= 1) {
       finalFipi.push({
         ...t,
-        rule: `Укажите цифру(-ы), на месте которой(-ых) пишется ${targetN}. Предложение: «${rawSent}»`,
+        rule: `Укажите цифру(-ы), на месте которой(-ых) пишется ${targetN}.`,
+        instruction: rawSent,
+        sentence: rawSent,
         rows: newRows,
         correctIndices: validCorrIndices,
       });

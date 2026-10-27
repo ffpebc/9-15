@@ -3,6 +3,7 @@ import {
   TrainerQuestion,
 } from '../utils/trainerLogic';
 import { classifyWordSubtopicAndException } from '../utils/wordClassifier';
+import { Task15SentenceView } from './Task15SentenceView';
 
 const SHORT_MORPHEME_BY_TASK: Record<TrainerQuestion['task'], string> = {
   '9': 'Корень слова',
@@ -13,6 +14,70 @@ const SHORT_MORPHEME_BY_TASK: Record<TrainerQuestion['task'], string> = {
   '14': 'Слитно / дефис / разд.',
   '15': 'Правописание Н / НН',
 };
+
+function cleanQuestionRule(rule: string | undefined, task: string): string {
+  if (!rule) {
+    if (task === '13') return 'Укажите варианты ответов, в которых НЕ с выделенным словом пишется РАЗДЕЛЬНО (или СЛИТНО).';
+    if (task === '15') return 'Укажите цифру(-ы), на месте которой(-ых) пишется НН (или Н).';
+    return 'Укажите варианты ответов, в которых во всех словах одного ряда пропущена одна и та же буква.';
+  }
+  let cleaned = rule.replace(/\s*Предложение:\s*«?.*$/is, '').trim();
+  cleaned = cleaned.replace(/«\.\.\.—\s*«\.\.\./g, '').replace(/—\s*«\.\.\.[^»]*»*/g, '').replace(/—\s*«\.\.\..*$/, '').replace(/[«»]/g, '').trim();
+  return cleaned || (task === '15' ? 'Укажите цифру(-ы), на месте которой(-ых) пишется НН (или Н).' : rule);
+}
+
+function resolveTask15Sentence(question: any): string {
+  let sent = ((question.instruction || question.sentence || '') as string).trim();
+
+  // If sentence is missing or empty, extract from rule if embedded
+  if (!sent && question.rule) {
+    const m = question.rule.match(/Предложение:\s*«?([^»]+)»?/i);
+    if (m && m[1]) {
+      sent = m[1].trim();
+    }
+  }
+
+  // Strip scraper artifacts
+  if (sent) {
+    sent = sent
+      .replace(/«\.\.\.—\s*«\.\.\./g, '')
+      .replace(/—\s*«\.\.\.[^»]*»*/g, '')
+      .replace(/—\s*«\.\.\..*$/, '')
+      .replace(/«\.\.\./g, '')
+      .replace(/\.\.\.»/g, '')
+      .replace(/[«»]/g, '')
+      .trim();
+  }
+
+  // Check if valid gaps with digits exist in the sentence
+  const hasGaps = /([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/.test(sent);
+
+  // If missing, corrupted or no digit gaps, reconstruct cleanly from question.rows
+  if (!sent || !hasGaps || sent.length < 15) {
+    if (Array.isArray(question.rows) && question.rows.length > 0) {
+      const parts = question.rows.map((r: any, i: number) => {
+        const raw = r.words?.[0] || '';
+        const m = raw.match(/([А-Яа-яЁё]+)\((\d+)\)([А-Яа-яЁё]*)/);
+        if (m) return `${m[1]}(${m[2]})${m[3]}`;
+        const clean = raw.replace(/\s*—\s*.*$/, '').replace(/[«»]/g, '').trim();
+        return `${clean}(${i + 1})`;
+      });
+      sent = `В данном предложении пропущены буквы: ${parts.join(', ')}.`;
+    }
+  }
+
+  return sent;
+}
+
+function cleanWordArtifacts(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/«\.\.\.—\s*«\.\.\./g, '')
+    .replace(/—\s*«\.\.\.[^»]*»*/g, '')
+    .replace(/\s*—\s*«?\.\.\..*$/, '')
+    .replace(/[«»]/g, '')
+    .trim();
+}
 
 interface QuestionCardViewProps {
   question: TrainerQuestion;
@@ -448,90 +513,179 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
           {fipiHasExceptions ? ' (есть исключения)' : ''}
         </span>
         <span className="shrink-0 text-right" style={{ color: 'var(--ios-label-sec)' }}>
-          {fipiSubmitted ? `Ответ: ${correctStr}` : 'Укажите 2–4 цифры'}
+          {fipiSubmitted
+            ? `Ответ: ${correctStr}`
+            : question.task === '15'
+            ? 'Укажите цифры'
+            : 'Укажите 2–4 цифры'}
         </span>
       </div>
 
-      {/* Official Instruction Box (especially for Task 13) */}
+      {/* Official Instruction Box (especially for Task 13 and Task 15) */}
       <div
         className="text-[12px] font-medium px-3 py-2 rounded-xl text-left leading-snug border border-[var(--ios-separator)] shadow-xs"
         style={{ background: 'var(--ios-bg-secondary)', color: 'var(--ios-label)' }}
       >
         <div className="text-[12px] font-semibold leading-snug">
-          {question.rule || (question.task === '13'
-            ? 'Укажите варианты ответов, в которых НЕ с выделенным словом пишется РАЗДЕЛЬНО (или СЛИТНО).'
-            : 'Укажите варианты ответов, в которых во всех словах одного ряда пропущена одна и та же буква.')}
+          {cleanQuestionRule(question.rule, question.task)}
         </div>
       </div>
 
-      {/* 5 Rows of Words / Sentences */}
-      <div className="flex flex-col gap-1.5 my-auto">
-        {question.rows.map((row, idx) => {
-          const rowNum = idx + 1;
-          const isSelected = fipiSelectedRows.includes(rowNum);
-          let rowState = isSelected ? 'selected' : '';
-          if (fipiSubmitted) {
-            if (row.isCorrectRow && isSelected) rowState = 'ok';
-            else if (row.isCorrectRow && !isSelected) rowState = 'missed';
-            else if (!row.isCorrectRow && isSelected) rowState = 'bad';
-          }
-          return (
-            <button
-              key={rowNum}
-              id={`fipi-row-${rowNum}`}
-              type="button"
-              disabled={fipiSubmitted}
-              onClick={() => toggleRow(rowNum)}
-              className={`fipi-row-cell ${rowState}`}
+      {/* Task 15 Authentic Sentence + Word Grid OR Tasks 9-14 5-Row List */}
+      {question.task === '15' ? (
+        <div className="flex flex-col gap-2 my-auto">
+          {/* Authentic Full Sentence Stage */}
+          <div
+            className="p-3.5 sm:p-4 rounded-2xl text-left border border-[var(--ios-separator)] shadow-xs"
+            style={{
+              background: 'var(--ios-bg-secondary)',
+              color: 'var(--ios-label)',
+            }}
+          >
+            <div
+              className="text-[10px] font-extrabold uppercase tracking-wider mb-1.5 opacity-70"
+              style={{ color: 'var(--ios-blue)' }}
             >
-              <span
-                className="w-6 h-6 rounded-full text-[12px] font-extrabold flex items-center justify-center shrink-0"
-                style={{
-                  background: isSelected ? 'var(--ios-blue)' : 'var(--ios-bg-tertiary)',
-                  color: isSelected ? '#FFFFFF' : 'var(--ios-label)',
-                }}
-              >
-                {rowNum}
-              </span>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="text-[13px] font-bold leading-snug">
-                  {(fipiSubmitted ? row.solvedWords : row.words).join(', ')}
-                </div>
-                {fipiSubmitted && (
-                  <div
-                    className="text-[11px] mt-0.5 truncate"
+              Предложение задания:
+            </div>
+            <Task15SentenceView
+              sentence={resolveTask15Sentence(question)}
+              rows={question.rows}
+              selectedDigits={fipiSelectedRows}
+              isSubmitted={fipiSubmitted}
+              onToggleDigit={toggleRow}
+            />
+          </div>
+
+          {/* Numbered Word Cards (selectable / feedback states) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {question.rows.map((row, idx) => {
+              const rowNum = idx + 1;
+              const isSelected = fipiSelectedRows.includes(rowNum);
+              let rowState = isSelected ? 'selected' : '';
+              if (fipiSubmitted) {
+                if (row.isCorrectRow && isSelected) rowState = 'ok';
+                else if (row.isCorrectRow && !isSelected) rowState = 'missed';
+                else if (!row.isCorrectRow && isSelected) rowState = 'bad';
+              }
+              const rawWord = fipiSubmitted ? row.solvedWords[0] : row.words[0];
+              const displayWord = cleanWordArtifacts(rawWord);
+              return (
+                <button
+                  key={rowNum}
+                  id={`fipi-row-${rowNum}`}
+                  type="button"
+                  disabled={fipiSubmitted}
+                  onClick={() => toggleRow(rowNum)}
+                  className={`fipi-row-cell ${rowState}`}
+                >
+                  <span
+                    className="w-6 h-6 rounded-full text-[12px] font-extrabold flex items-center justify-center shrink-0"
                     style={{
-                      color: row.isCorrectRow
-                        ? 'var(--ios-green)'
-                        : 'var(--ios-label-sec)',
+                      background: isSelected ? 'var(--ios-blue)' : 'var(--ios-bg-tertiary)',
+                      color: isSelected ? '#FFFFFF' : 'var(--ios-label)',
                     }}
                   >
-                    {question.task === '13' || question.task === '14'
-                      ? (row.isCorrectRow
-                          ? `✓ Подходит: ${row.letter}`
-                          : `Не подходит: ${row.letter}`)
-                      : question.task === '15'
-                      ? (row.isCorrectRow
+                    {rowNum}
+                  </span>
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="text-[13px] font-bold leading-snug">
+                      {displayWord}
+                    </div>
+                    {fipiSubmitted && (
+                      <div
+                        className="text-[11px] mt-0.5 truncate font-semibold"
+                        style={{
+                          color: row.isCorrectRow
+                            ? 'var(--ios-green)'
+                            : 'var(--ios-label-sec)',
+                        }}
+                      >
+                        {row.isCorrectRow
                           ? `✓ Подходит: пишется «${row.letter}»`
-                          : 'Не подходит')
-                      : (row.isCorrectRow
-                          ? `✓ Подходит: одна и та же буква «${row.letter}»`
-                          : 'Разные буквы в ряду')}
+                          : `Не подходит: пишется «${row.letter}»`}
+                      </div>
+                    )}
+                    {fipiSubmitted && row.explanation && (
+                      <div
+                        className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
+                        style={{ color: 'var(--ios-label-sec)' }}
+                      >
+                        {cleanWordArtifacts(row.explanation)}
+                      </div>
+                    )}
                   </div>
-                )}
-                {fipiSubmitted && row.explanation && (
-                  <div
-                    className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
-                    style={{ color: 'var(--ios-label-sec)' }}
-                  >
-                    {row.explanation}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* Standard 5 Rows for Tasks 9, 10, 11, 12, 13, 14 */
+        <div className="flex flex-col gap-1.5 my-auto">
+          {question.rows.map((row, idx) => {
+            const rowNum = idx + 1;
+            const isSelected = fipiSelectedRows.includes(rowNum);
+            let rowState = isSelected ? 'selected' : '';
+            if (fipiSubmitted) {
+              if (row.isCorrectRow && isSelected) rowState = 'ok';
+              else if (row.isCorrectRow && !isSelected) rowState = 'missed';
+              else if (!row.isCorrectRow && isSelected) rowState = 'bad';
+            }
+            return (
+              <button
+                key={rowNum}
+                id={`fipi-row-${rowNum}`}
+                type="button"
+                disabled={fipiSubmitted}
+                onClick={() => toggleRow(rowNum)}
+                className={`fipi-row-cell ${rowState}`}
+              >
+                <span
+                  className="w-6 h-6 rounded-full text-[12px] font-extrabold flex items-center justify-center shrink-0"
+                  style={{
+                    background: isSelected ? 'var(--ios-blue)' : 'var(--ios-bg-tertiary)',
+                    color: isSelected ? '#FFFFFF' : 'var(--ios-label)',
+                  }}
+                >
+                  {rowNum}
+                </span>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="text-[13px] font-bold leading-snug">
+                    {(fipiSubmitted ? row.solvedWords : row.words).map(cleanWordArtifacts).join(', ')}
                   </div>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+                  {fipiSubmitted && (
+                    <div
+                      className="text-[11px] mt-0.5 truncate font-semibold"
+                      style={{
+                        color: row.isCorrectRow
+                          ? 'var(--ios-green)'
+                          : 'var(--ios-label-sec)',
+                      }}
+                    >
+                      {question.task === '13' || question.task === '14'
+                        ? (row.isCorrectRow
+                            ? `✓ Подходит: ${row.letter}`
+                            : `Не подходит: ${row.letter}`)
+                        : (row.isCorrectRow
+                            ? `✓ Подходит: одна и та же буква «${row.letter}»`
+                            : 'Разные буквы в ряду')}
+                    </div>
+                  )}
+                  {fipiSubmitted && row.explanation && (
+                    <div
+                      className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
+                      style={{ color: 'var(--ios-label-sec)' }}
+                    >
+                      {cleanWordArtifacts(row.explanation)}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Submission & Next Action Banner */}
       <div className="mt-auto pt-1 flex flex-col gap-2">
@@ -573,6 +727,8 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
             <span>
               {fipiSelectedRows.length > 0
                 ? `Проверить ответ (${fipiSelectedRows.join(', ')})`
+                : question.task === '15'
+                ? `Выберите цифры в предложении (1–${question.rows.length})`
                 : 'Выберите номера строк (2–4)'}
             </span>
           </button>

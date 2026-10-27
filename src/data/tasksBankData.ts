@@ -37,7 +37,10 @@ if (typeof window === 'undefined' && typeof process !== 'undefined') {
     const fs = getModule('node:fs');
     const path = getModule('node:path');
     if (fs && path) {
-      const dataDir = path.resolve(process.cwd(), 'src/data');
+      let dataDir = path.resolve(process.cwd(), 'src/data');
+      if (!fs.existsSync(path.join(dataDir, 'allWordsBank9_15.json'))) {
+        dataDir = path.resolve(process.cwd(), 'public/data');
+      }
       const allWordsPath = path.join(dataDir, 'allWordsBank9_15.json');
       if (fs.existsSync(allWordsPath)) {
         const parsed = JSON.parse(fs.readFileSync(allWordsPath, 'utf8'));
@@ -94,22 +97,14 @@ refreshMaps();
 // Очищаем устаревший кэш с урезанной или поврежденной базой
 if (typeof window !== 'undefined' && 'caches' in window) {
   try {
-    window.caches.delete('ege-bank-cache-v1');
-    window.caches.delete('ege-bank-cache-v2');
-    window.caches.delete('ege-bank-cache-v3');
-    window.caches.delete('ege-bank-cache-v4');
-    window.caches.delete('ege-bank-cache-v5');
-    window.caches.delete('ege-bank-cache-v6');
-    window.caches.delete('ege-bank-cache-v7');
-    window.caches.delete('ege-bank-cache-v8');
-    window.caches.delete('ege-bank-cache-v9');
-    window.caches.delete('ege-bank-cache-v10');
-    window.caches.delete('ege-bank-cache-v11');
+    for (let v = 1; v <= 13; v++) {
+      window.caches.delete(`ege-bank-cache-v${v}`);
+    }
   } catch {}
 }
 
-async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<any> {
-  const cacheName = 'ege-bank-cache-v12';
+async function fetchJsonWithCache(url: string, fallbackUrls: string[] = []): Promise<any> {
+  const cacheName = 'ege-bank-cache-v14';
   let cache: Cache | null = null;
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {
@@ -125,26 +120,11 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
     } catch {}
   }
 
-  // 1. Локальная очищенная и проверенная база (/data/*.json)
-  try {
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (cache) {
-        try {
-          await cache.put(url, new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } }));
-        } catch {}
-      }
-      return data;
-    }
-  } catch (err) {
-    console.warn(`[EGE Bank] Local fetch error, falling back:`, err);
-  }
-
-  // 2. Fallback
-  if (fallbackUrl) {
+  // 1. Попытка загрузки из локальной или fallback CDN баз
+  const allUrls = [url, ...fallbackUrls];
+  for (const targetUrl of allUrls) {
     try {
-      const res = await fetch(fallbackUrl);
+      const res = await fetch(targetUrl);
       if (res.ok) {
         const data = await res.json();
         if (cache) {
@@ -155,7 +135,7 @@ async function fetchJsonWithCache(url: string, fallbackUrl?: string): Promise<an
         return data;
       }
     } catch (err) {
-      console.warn(`[EGE Bank] Fallback fetch error:`, err);
+      console.warn(`[EGE Bank] Fetch error for ${targetUrl}:`, err);
     }
   }
 
@@ -171,12 +151,22 @@ export async function loadFullDataBank(): Promise<boolean> {
 
   try {
     const localBase = '/data';
+    const rawGithubBase = 'https://raw.githubusercontent.com/ffpebc/9-15/data/public/data';
     const cdnBase = 'https://cdn.jsdelivr.net/gh/ffpebc/9-15@data/public/data';
-    const vParam = '?v=12';
+    const vParam = '?v=14';
     const [allWordsData, fipiData, sprintData] = await Promise.all([
-      fetchJsonWithCache(`${localBase}/allWordsBank9_15.json${vParam}`, `${cdnBase}/allWordsBank9_15.json${vParam}`),
-      fetchJsonWithCache(`${localBase}/fipiTasksBank9_15.json${vParam}`, `${cdnBase}/fipiTasksBank9_15.json${vParam}`),
-      fetchJsonWithCache(`${localBase}/sprintBank9_15.json${vParam}`, `${cdnBase}/sprintBank9_15.json${vParam}`),
+      fetchJsonWithCache(`${localBase}/allWordsBank9_15.json${vParam}`, [
+        `${rawGithubBase}/allWordsBank9_15.json${vParam}`,
+        `${cdnBase}/allWordsBank9_15.json${vParam}`,
+      ]),
+      fetchJsonWithCache(`${localBase}/fipiTasksBank9_15.json${vParam}`, [
+        `${rawGithubBase}/fipiTasksBank9_15.json${vParam}`,
+        `${cdnBase}/fipiTasksBank9_15.json${vParam}`,
+      ]),
+      fetchJsonWithCache(`${localBase}/sprintBank9_15.json${vParam}`, [
+        `${rawGithubBase}/sprintBank9_15.json${vParam}`,
+        `${cdnBase}/sprintBank9_15.json${vParam}`,
+      ]),
     ]);
 
     let updated = false;

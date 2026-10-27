@@ -1469,100 +1469,216 @@ const CHEAT_SECTIONS: CheatSectionData[] = [
   },
 
   /* ==========================================================================
-     ЗАДАНИЕ 15: ПРАВОПИСАНИЕ Н И НН (СТР. 71–80)
+     ЗАДАНИЕ 15: ПРАВОПИСАНИЕ Н И НН (СТР. 84–86)
      ========================================================================== */
   {
     task: '15',
     title: '15 · ПРАВОПИСАНИЕ Н И НН',
-    pages: 'стр. 71–80',
+    pages: 'стр. 84–86',
     accentVar: 'var(--ios-red)',
     softVar: 'var(--ios-red-soft)',
     keywords:
-      'одна н две нн прилагательные причастия наречия суффиксы ан ян ин енн онн стеклянный оловянный деревянный ветреный безветренный жареный пожаренный кованый жеваный раненый решена воспитана воспитанна',
+      'одна н две нн отыменные отглагольные причастия наречия суффиксы ан ян ин енн онн стеклянный оловянный деревянный ветреный безветренный подветренный время временный пламя пламенный ценна ясна юный единый румяный рьяный пьяный синий багряный зеленый вороной свиной фазаний вороний бараний тюлений павлиний олений притяжательные 4 условия приставка ова ева ирова зависимое слово сов вид кованый жеваный клеваный подкованный изжеванный жареный крашеный вареный сушеный краткие причастия решена избалованы судьбой избалованны воспитанник путано раненый израненный раненный в ногу смышленый названый посаженый прощеное верченый ухоженный приверженный невиданный нечаянный неслыханный нежданный негаданный желанный медленный деланный обещанный неожиданный лелеянный долгожданный поистине совершенно необыкновенно немедленно соответственно гостиная гостиница приданое труженик масленица пудреница путаница злоумышленник приверженность настроенность неизменность собственность',
     content: (
       <>
-        {/* 1. ОТЫМЕННЫЕ ПРИЛАГАТЕЛЬНЫЕ */}
+        {/* 1. ОТЫМЕННЫЕ ПРИЛАГАТЕЛЬНЫЕ (ОТ СУЩ., СТР. 84) */}
         <div className="cheat-subbox">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="cheat-subbox-title !mb-0" style={{ color: 'var(--ios-red)' }}>
-              1. Отыменные прилагательные (от существительных)
+              1. Отыменные прилагательные (от сущ., стр. 84)
             </div>
             <div className="flex items-center gap-1">
-              <BadgeTag label="Н" tone="orange" />
-              <BadgeTag label="НН" tone="red" />
+              <BadgeTag label="СУФФИКС + ОСНОВА" tone="orange" />
+              <BadgeTag label="Н / НН" tone="red" />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
+            {/* ОДНА Н */}
             <div className="p-2.5 rounded-xl flex flex-col gap-1.5" style={{ background: 'var(--ios-orange-soft)' }}>
-              <div className="font-bold text-[12.5px]" style={{ color: 'var(--ios-orange)' }}>
-                Одна буква Н:
+              <div className="font-extrabold text-[12.5px] flex items-center justify-between" style={{ color: 'var(--ios-orange)' }}>
+                <span>Пишется одна «Н»:</span>
+                <BadgeTag label="1 Н" tone="orange" />
               </div>
-              <div>• <strong>-ИН-</strong>: <em>утиный, соколиный, мышиный</em></div>
-              <div>• <strong>-АН- / -ЯН-</strong>: <em>песчаный, глиняный, серебряный</em></div>
-              <div>• <strong>Исключение:</strong> <em>ветреный день</em> (но: <em>безветренный</em> с НН)</div>
+              <div>
+                1. <strong>В основе нет Н:</strong> <em>мебель + н → мебельный</em>
+              </div>
+              <div>
+                2. <strong>Суффиксы -АН-, -ЯН-, -ИН-:</strong>
+                <div className="ml-2 mt-0.5 opacity-90">
+                  • <em>глина + ян → глиняный</em><br />
+                  • <em>песок + ан → песчаный</em><br />
+                  • <em>утка + ин → утиный</em>, <em>соколиный</em>
+                </div>
+              </div>
+              <div className="mt-1 p-1.5 rounded-lg font-semibold" style={{ background: 'rgba(255, 149, 0, 0.15)', border: '0.5px solid rgba(255, 149, 0, 0.35)' }}>
+                ⚡ <strong>Исключения (-ЯНН- с двумя НН):</strong><br />
+                <em>стеклянный, оловянный, деревянный</em>.
+              </div>
             </div>
 
+            {/* ДВЕ НН */}
             <div className="p-2.5 rounded-xl flex flex-col gap-1.5" style={{ background: 'var(--ios-red-soft)' }}>
-              <div className="font-bold text-[12.5px]" style={{ color: 'var(--ios-red)' }}>
-                Две буквы НН:
+              <div className="font-extrabold text-[12.5px] flex items-center justify-between" style={{ color: 'var(--ios-red)' }}>
+                <span>Пишется две «НН»:</span>
+                <BadgeTag label="НН" tone="red" />
               </div>
-              <div>• <strong>Стык корня на Н + суффикс Н</strong>: <em>каменный, осенний, туманный</em></div>
-              <div>• <strong>-ЕНН- / -ОНН-</strong>: <em>соломенный, экскурсионный, традиционный</em></div>
-              <div>• <strong>3 исключения на -ЯНН-</strong>: <em>стеклянный, оловянный, деревянный</em></div>
+              <div>
+                1. <strong>Основа на -Н + суффикс -Н-:</strong>
+                <div className="ml-2 mt-0.5 opacity-90">
+                  • <em>старина + н → старинный</em><br />
+                  • <em>туман + н → туманный</em>, <em>картина → картинный</em>
+                </div>
+              </div>
+              <div>
+                2. <strong>Суффиксы -ОНН-, -ЕНН-:</strong>
+                <div className="ml-2 mt-0.5 opacity-90">
+                  • <em>лекция → лекционный</em>, <em>солома → соломенный</em>
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg font-semibold" style={{ background: 'rgba(255, 59, 48, 0.12)', border: '0.5px solid rgba(255, 59, 48, 0.28)' }}>
+                ⚡ <strong>Исключение:</strong> <em>ветреный</em> (день, человек),<br />
+                но с приставками пишется НН: <em>безветренный, подветренный</em>.
+              </div>
+              <div>
+                3. <strong>Существительные на -МЯ → НН (-ЕНН-):</strong><br />
+                <em>время → временный, пламя → пламенный, семя → семенной, стремя → стременной</em>.
+              </div>
+              <div>
+                4. <strong>Краткие отымённые прил.:</strong> столько же Н, сколько в полных:<br />
+                <em>ценная вещь → вещь ценна</em>, <em>ясная даль → даль ясна</em>.
+              </div>
             </div>
           </div>
+
+          <MnemonicBox title="❗ 5. ЗАПОМНИ (1 Н): СЛОВАРНЫЕ И ПРИТЯЖАТЕЛЬНЫЕ ПРИЛАГАТЕЛЬНЫЕ">
+            <em>юный, единый, румяный, рьяный, пьяный, синий, багряный, зелёный, вороной (чёрный), свиной, фазаний, вороний, бараний, тюлений, павлиний, олений</em> — притяжательные прилагательные ВСЕГДА пишутся с <strong>одной буквой Н</strong>!
+          </MnemonicBox>
         </div>
 
-        {/* 2. ОТГЛАГОЛЬНЫЕ ПРИЛ. И ПРИЧАСТИЯ */}
+        {/* 2. ОТГЛАГОЛЬНЫЕ ПРИЛ. И ПРИЧАСТИЯ (СТР. 85–86) */}
         <div className="cheat-subbox">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="cheat-subbox-title !mb-0" style={{ color: 'var(--ios-blue)' }}>
-              2. Отглагольные прилагательные vs Причастия (4 условия НН)
+              2. Отглагольные прил., причастия, сущ. и наречия (стр. 85–86)
             </div>
             <BadgeTag label="4 УСЛОВИЯ НН" tone="blue" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
+            {/* 4 УСЛОВИЯ ДЛЯ НН */}
             <div className="p-2.5 rounded-xl flex flex-col gap-1.5" style={{ background: 'var(--ios-bg-cell-hover)' }}>
-              <div className="font-bold text-[12.5px]" style={{ color: 'var(--ios-red)' }}>
-                Пишется НН, если есть хотя бы 1 признак:
+              <div className="font-extrabold text-[12.5px]" style={{ color: 'var(--ios-red)' }}>
+                В полных пишется НН (хотя бы 1 условие):
               </div>
-              <div>1. <strong>Есть приставка</strong> (кроме НЕ-): <em>пожаренный, покрашенный</em></div>
-              <div>2. <strong>Есть зависимое слово</strong>: <em>жаренный на масле карась</em></div>
-              <div>3. <strong>Суффикс -ОВА- / -ЕВА-</strong>: <em>маринованный, организованный</em></div>
-              <div>4. <strong>Образовано от сов. вида</strong>: <em>решённый (решить — что сделать?)</em></div>
+              <div>
+                1. <strong>Есть приставка (кроме НЕ-):</strong><br />
+                <em>жарить → пережаренный</em>, <em>покрашенный</em>, <em>высушенный</em>.
+              </div>
+              <div>
+                2. <strong>Суффикс -ОВА-, -ЕВА-, -ИРОВА-:</strong><br />
+                <em>балованный, асфальтированный, маринованный, организованный</em>.
+                <div className="mt-1 p-1 rounded font-semibold text-[11px]" style={{ background: 'var(--ios-orange-soft)', color: 'var(--ios-label)' }}>
+                  ❗ <em>Запомни:</em> <strong>кованый, жёваный, клёваный</strong> (-ов-, -ев- в корне!). Но с приставками: <em>подкованный, изжёванный</em> (НН).
+                </div>
+              </div>
+              <div>
+                3. <strong>Есть зависимое слово:</strong><br />
+                <em>жаренный (на чём?) на масле</em>, <em>вязанный (кем?) бабушкой свитер</em>.
+              </div>
+              <div>
+                4. <strong>От глагола сов. вида (что сделать?):</strong><br />
+                <em>решённый (решить)</em>, <em>купленный (купить)</em>, <em>брошенный (бросить)</em>, <em>лишённый (лишить)</em>.
+              </div>
             </div>
 
+            {/* 1 Н В ОТГЛАГОЛЬНЫХ */}
             <div className="p-2.5 rounded-xl flex flex-col gap-1.5" style={{ background: 'var(--ios-bg-cell-hover)' }}>
-              <div className="font-bold text-[12.5px]" style={{ color: 'var(--ios-orange)' }}>
-                Пишется одна Н (отглагольные прил.):
+              <div className="font-extrabold text-[12.5px]" style={{ color: 'var(--ios-orange)' }}>
+                Ни одного условия нет → 1 Н (отглагольные прил.):
               </div>
-              <div>• Нет приставки, нет зависимых слов, несов. вид: <em>жареный, варёный, печёный, вязаный</em></div>
-              <div>• <em>кованый, жеваный</em> (-ов-, -ев- в корне!)</div>
-              <div>• <em>раненый</em> (одиночное прил., но <em>тяжело раненный</em> — НН)</div>
+              <div>
+                Образованы от глаголов несовершенного вида, нет приставок (кроме НЕ-), нет зависимых слов и нет -ОВА-/-ЕВА-:
+              </div>
+              <div className="p-2 rounded-lg" style={{ background: 'var(--ios-orange-soft)' }}>
+                <em>красить → крашеный</em> (но: <em>перекрашенный</em>)<br />
+                <em>жарить → жареный</em> (но: <em>пожаренный</em>, <em>жаренный на масле</em>)<br />
+                <em>варить → варёный</em>, <em>печь → печёный</em><br />
+                <em>сушить → сушёный</em>, <em>вязать → вязаный</em><br />
+                <em>путать → путаный ответ</em>, <em>ткать → тканый</em>
+              </div>
+              <div className="text-[11.5px] opacity-90 mt-1">
+                Приставка <strong>НЕ-</strong> не влияет на написание:<br />
+                <em>некрашеный пол, незваный гость, нежареная рыба</em> — всё равно одна буква Н.
+              </div>
             </div>
           </div>
         </div>
 
-        {/* 3. КРАТКИЕ ФОРМЫ И НАРЕЧИЯ */}
+        {/* 3. КРАТКИЕ ФОРМЫ, СУЩ. И НАРЕЧИЯ (СТР. 86) */}
         <div className="cheat-subbox">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="cheat-subbox-title !mb-0" style={{ color: 'var(--ios-purple)' }}>
-              3. Краткие формы и наречия
+              3. Краткие формы, сущ. и наречия (стр. 86)
             </div>
             <BadgeTag label="КРАТКИЕ ФОРМЫ" tone="purple" />
           </div>
 
-          <div className="p-2.5 rounded-xl text-[12px] flex flex-col gap-1.5" style={{ background: 'var(--ios-bg-cell-hover)' }}>
-            <div>
-              • <strong>Краткие причастия:</strong> ВСЕГДА пишется <strong>одна Н</strong> (<em>задача решена, книга прочитана, ошибка исправлена</em>).
+          <div className="p-2.5 rounded-xl text-[12px] flex flex-col gap-2" style={{ background: 'var(--ios-bg-cell-hover)' }}>
+            <div className="p-2 rounded-lg" style={{ background: 'var(--ios-blue-soft)' }}>
+              <strong style={{ color: 'var(--ios-blue)' }}>• Краткие причастия → ВСЕГДА 1 Н</strong> (можно заменить глаголом):<br />
+              <em>решённый → задача решена</em> (задачу решили);<br />
+              <em>Вы избалованы судьбой</em> (судьба вас избаловала — кр. причастие).
             </div>
-            <div>
-              • <strong>Краткие прилагательные:</strong> пишется столько же Н, сколько в полной форме (<em>девушка образованна и воспитанна</em> ← от <em>воспитанная</em>).
+
+            <div className="p-2 rounded-lg" style={{ background: 'var(--ios-purple-soft)' }}>
+              <strong style={{ color: 'var(--ios-purple)' }}>• Краткие отглаг. прил. → столько же Н, сколько в полных</strong> (нельзя заменить глаголом):<br />
+              <em>красить → крашеный → комната крашена</em>;<br />
+              <em>Дети избалованны</em> (дети капризны, проявляют избалованность — кр. прил.).
             </div>
-            <div>
-              • <strong>Наречия на -О / -Е:</strong> пишется столько же Н, сколько в слове, от которого они образованы (<em>говорил путано</em> ← от <em>путаный</em>; <em>поступил обдуманно</em> ← от <em>обдуманный</em>).
+
+            <div className="p-2 rounded-lg" style={{ background: 'var(--ios-green-soft)' }}>
+              <strong style={{ color: 'var(--ios-green)' }}>• Существительные и наречия на -О / -Е:</strong> пишется столько же Н, сколько в производящем слове:<br />
+              <em>воспитать (сов. в.) → воспитанный → воспитанник, воспитанность</em>;<br />
+              <em>путать → путаный → путано говорить, путаница</em>;<br />
+              <em>трудиться → труженый → труженик</em>;<br />
+              <em>гость → гостиный → гостиная, гостиница</em>.
+            </div>
+          </div>
+        </div>
+
+        {/* 4. ЗАПОМИНАЛКИ И СЛОВАРНЫЕ СПИСКИ (СТР. 85–86) */}
+        <div className="cheat-subbox">
+          <div className="cheat-subbox-title" style={{ color: 'var(--ios-orange)' }}>
+            4. Полные списки исключений и словарных слов (стр. 85–86)
+          </div>
+
+          <div className="flex flex-col gap-2 text-[12px]">
+            <div className="p-2.5 rounded-xl" style={{ background: 'var(--ios-orange-soft)', border: '0.5px solid rgba(255, 149, 0, 0.32)' }}>
+              <div className="font-extrabold text-[12px] uppercase mb-1" style={{ color: 'var(--ios-orange)' }}>
+                ❗ Запомни (одна буква Н):
+              </div>
+              <div className="font-semibold leading-relaxed">
+                <em>раненый</em> (но с приставкой или зав. словами: <em>израненный, раненный в ногу солдат</em>), <em>смышлёный ребёнок</em>, <em>названый брат</em> (но: <em>названный в честь деда</em>), <em>посажёный отец</em>, <em>прощёное воскресенье</em>, <em>верчёный</em>.
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl" style={{ background: 'var(--ios-red-soft)', border: '0.5px solid rgba(255, 59, 48, 0.28)' }}>
+              <div className="font-extrabold text-[12px] uppercase mb-1" style={{ color: 'var(--ios-red)' }}>
+                ❗ Запомни (две буквы НН):
+              </div>
+              <div className="font-semibold leading-relaxed">
+                <em>ухоженный, приверженный, невиданный, нечаянный, неслыханный, нежданный, негаданный, желанный, медленный, деланный, обещанный, неожиданный, лелеянный, долгожданный</em>.
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl" style={{ background: 'var(--ios-purple-soft)', border: '0.5px solid rgba(175, 82, 222, 0.28)' }}>
+              <div className="font-extrabold text-[12px] uppercase mb-1" style={{ color: 'var(--ios-purple)' }}>
+                ❗ Запомни (существительные и наречия, стр. 86):
+              </div>
+              <div className="font-semibold leading-relaxed">
+                <em>поистине, совершенно, необыкновенно, немедленно, соответственно, гостиная, гостиница, приданое, труженик, масленица, пудреница, путаница, злоумышленник, приверженность, настроенность, неизменность, собственность</em>.
+              </div>
             </div>
           </div>
         </div>

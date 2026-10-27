@@ -37,6 +37,7 @@ import {
 import { CheatsheetModal } from './components/CheatsheetModal';
 import { SyncModal } from './components/SyncModal';
 import { QuestionCardView } from './components/QuestionCardView';
+import { Task15SentenceView } from './components/Task15SentenceView';
 import {
   PresetsModal,
   RuleInspectorModal,
@@ -2128,6 +2129,31 @@ export default function App() {
                           </div>
                         </div>
 
+                        {/* Task 15 Authentic Sentence View in KIM */}
+                        {kimActiveTask === '15' && (currentKimTaskQuestion.instruction || (currentKimTaskQuestion as any).sentence) && (
+                          <div
+                            className="p-3.5 rounded-2xl mb-2.5 text-left border border-[var(--ios-separator)] shadow-xs"
+                            style={{
+                              background: 'var(--ios-bg-secondary)',
+                              color: 'var(--ios-label)',
+                            }}
+                          >
+                            <div
+                              className="text-[10px] font-extrabold uppercase tracking-wider mb-1.5 opacity-70"
+                              style={{ color: 'var(--ios-blue)' }}
+                            >
+                              Предложение задания:
+                            </div>
+                            <Task15SentenceView
+                              sentence={currentKimTaskQuestion.instruction || (currentKimTaskQuestion as any).sentence || ''}
+                              rows={currentKimTaskQuestion.rows}
+                              selectedDigits={(kimAnswers['15'] || '').split('').map(Number).filter(Boolean)}
+                              isSubmitted={kimChecked}
+                              onToggleDigit={handleToggleKimRowDigit}
+                            />
+                          </div>
+                        )}
+
                         <div className="flex flex-col gap-1.5">
                           {currentKimTaskQuestion.rows.map((row, idx) => {
                             const rowNum = idx + 1;
@@ -2142,6 +2168,8 @@ export default function App() {
                               else if (!row.isCorrectRow && isPicked)
                                 rowStateClass = 'bad';
                             }
+
+                            const displayWords = kimChecked ? row.solvedWords : row.words;
 
                             return (
                               <button
@@ -2163,9 +2191,7 @@ export default function App() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-[13px] font-bold leading-snug">
-                                    {(kimChecked ? row.solvedWords : row.words).join(
-                                      ', '
-                                    )}
+                                    {displayWords.join(', ')}
                                   </div>
                                   {kimChecked && (
                                     <div
@@ -2176,9 +2202,25 @@ export default function App() {
                                           : 'var(--ios-label-sec)',
                                       }}
                                     >
-                                      {row.isCorrectRow
-                                        ? `Подходит (буква ${row.letter})`
-                                        : 'Разные буквы в ряду'}
+                                      {kimActiveTask === '15'
+                                        ? (row.isCorrectRow
+                                            ? `✓ Подходит: пишется «${row.letter}»`
+                                            : `Не подходит: пишется «${row.letter}»`)
+                                        : kimActiveTask === '13' || kimActiveTask === '14'
+                                        ? (row.isCorrectRow
+                                            ? `✓ Подходит: ${row.letter}`
+                                            : `Не подходит: ${row.letter}`)
+                                        : (row.isCorrectRow
+                                            ? `Подходит (буква ${row.letter})`
+                                            : 'Разные буквы в ряду')}
+                                    </div>
+                                  )}
+                                  {kimChecked && row.explanation && (
+                                    <div
+                                      className="text-[10.5px] mt-0.5 line-clamp-2 opacity-85 leading-tight"
+                                      style={{ color: 'var(--ios-label-sec)' }}
+                                    >
+                                      {row.explanation}
                                     </div>
                                   )}
                                 </div>
