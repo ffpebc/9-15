@@ -190,7 +190,7 @@ function LiquidGlassSegmentedInner<T extends string>({
           transform: `translate3d(${currentContinuousIndex * 100}%, 0, 0)`,
           transition: isDragging
             ? 'transform 0.04s linear'
-            : 'transform 0.50s cubic-bezier(0.22, 1.06, 0.32, 1)',
+            : 'transform 0.46s var(--spring-snappy, cubic-bezier(0.22, 1.06, 0.32, 1))',
         }}
       >
         <div
@@ -1297,12 +1297,12 @@ export const SwipeableSheet: React.FC<SwipeableSheetProps> = React.memo(({
       // Continue smoothly from current finger offset down off-screen with zero snap-back
       if (sheetRef.current) {
         sheetRef.current.style.transition =
-          'transform 0.42s cubic-bezier(0.32, 0.72, 0, 1)';
+          'transform 0.44s var(--spring-sheet, cubic-bezier(0.32, 0.72, 0, 1))';
         sheetRef.current.style.transform = 'translate3d(0, 104%, 0)';
       }
       if (backdropRef.current) {
         backdropRef.current.style.transition =
-          'opacity 0.40s cubic-bezier(0.32, 0.72, 0, 1)';
+          'opacity 0.40s var(--spring-smooth, cubic-bezier(0.32, 0.72, 0, 1))';
         backdropRef.current.style.opacity = '';
       }
       setIsActive(false);
@@ -1311,12 +1311,12 @@ export const SwipeableSheet: React.FC<SwipeableSheetProps> = React.memo(({
       // Smoothly spring back from current drag offset to open position
       if (sheetRef.current) {
         sheetRef.current.style.transition =
-          'transform 0.44s cubic-bezier(0.22, 1, 0.36, 1)';
+          'transform 0.44s var(--spring-snappy, cubic-bezier(0.22, 1, 0.36, 1))';
         sheetRef.current.style.transform = 'translate3d(0, 0, 0)';
       }
       if (backdropRef.current) {
         backdropRef.current.style.transition =
-          'opacity 0.38s cubic-bezier(0.22, 1, 0.36, 1)';
+          'opacity 0.38s var(--spring-smooth, cubic-bezier(0.22, 1, 0.36, 1))';
         backdropRef.current.style.opacity = '';
       }
     }

@@ -65,10 +65,29 @@
   --ios-teal: #30B0C7;
   --ios-pink: #FF2D55;
 
-  --spring-snappy: cubic-bezier(0.22, 1, 0.36, 1);
-  --spring-bouncy: cubic-bezier(0.32, 1.22, 0.64, 1);
-  --spring-spatial: cubic-bezier(0.19, 1, 0.22, 1);
-  --spring-sheet: cubic-bezier(0.22, 1, 0.32, 1);
+  /* Apple Kinematic Harmonic Oscillator linear() Spring Curves */
+  --apple-spring-snappy: linear(
+    0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%,
+    0.937 38.1%, 0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 60.1%,
+    1.015 65.6%, 1.003 77.9%, 0.998 86.8%, 1
+  );
+  --apple-spring-smooth: linear(
+    0, 0.004, 0.016 2.1%, 0.063 4.4%, 0.334 14.1%, 0.548 21.6%, 0.709 29.1%,
+    0.825 36.5%, 0.904 44.1%, 0.952 51.9%, 0.979 60%, 0.992 68.3%, 0.997 77%, 1
+  );
+  --apple-spring-bouncy: linear(
+    0, 0.009, 0.035 2.5%, 0.141 5.4%, 0.564 15.2%, 0.81 21.4%, 0.985 27.6%,
+    1.066 33.1%, 1.084 37%, 1.077 41.2%, 1.026 53.6%, 0.997 63.8%, 0.992 72.8%, 1
+  );
+  --apple-spring-sheet: linear(
+    0, 0.003, 0.012 1.8%, 0.048 3.8%, 0.264 12.5%, 0.472 19.8%, 0.643 27%,
+    0.774 34.2%, 0.867 41.5%, 0.929 48.9%, 0.967 56.6%, 0.987 64.6%, 0.996 73.1%, 1
+  );
+
+  --spring-snappy: var(--apple-spring-snappy, cubic-bezier(0.22, 1, 0.36, 1));
+  --spring-bouncy: var(--apple-spring-bouncy, cubic-bezier(0.32, 1.22, 0.64, 1));
+  --spring-spatial: var(--apple-spring-smooth, cubic-bezier(0.19, 1, 0.22, 1));
+  --spring-sheet: var(--apple-spring-sheet, cubic-bezier(0.22, 1, 0.32, 1));
   --spec-angle: -48deg;
 }
 
@@ -236,9 +255,10 @@ body::before {
   z-index: 50;
   height: 44px;
   border-radius: 999px;
+  corner-shape: squircle;
   background: var(--ios-glass-chrome);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(32px) saturate(210%);
+  -webkit-backdrop-filter: blur(32px) saturate(210%);
   border: 0.5px solid var(--ios-glass-border);
   box-shadow: var(--ios-glass-shadow), var(--ios-glass-inner-glow);
   overflow: hidden;
@@ -288,9 +308,10 @@ body::before {
   z-index: 50;
   height: 58px;
   border-radius: 999px;
+  corner-shape: squircle;
   background: var(--ios-glass-chrome);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(32px) saturate(210%);
+  -webkit-backdrop-filter: blur(32px) saturate(210%);
   border: 0.5px solid var(--ios-glass-border);
   box-shadow: var(--ios-glass-shadow), var(--ios-glass-inner-glow);
   padding: 4px;
@@ -479,13 +500,14 @@ button:focus-visible {
   position: relative;
   background: var(--ios-inset-grad);
   border-radius: 26px;
+  corner-shape: squircle;
   border: 0.5px solid var(--ios-glass-border);
   box-shadow: var(--ios-glass-shadow), var(--ios-glass-inner-glow);
   overflow: hidden;
   margin-bottom: 12px;
   transform: translateZ(0);
   contain: paint;
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease, border-color 0.24s ease;
+  transition: transform 0.28s var(--spring-snappy), box-shadow 0.28s ease, border-color 0.28s ease;
 }
 
 /* Top diagonal Fresnel reflection sheen */
@@ -1299,15 +1321,16 @@ html.dark .choice-card-btn.bad {
   max-width: 600px;
   max-height: 90dvh;
   background: var(--ios-sheet-grad);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  backdrop-filter: blur(32px) saturate(210%);
+  -webkit-backdrop-filter: blur(32px) saturate(210%);
   border-top: 1px solid var(--ios-glass-rim);
   border-left: 0.5px solid var(--ios-glass-border);
   border-right: 0.5px solid var(--ios-glass-border);
   border-radius: 36px 36px 0 0;
+  corner-shape: squircle;
   padding: 6px 16px calc(env(safe-area-inset-bottom, 0px) + 18px) 16px;
   transform: translate3d(0, 104%, 0);
-  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.44s var(--spring-sheet);
   display: flex;
   flex-direction: column;
   box-shadow: 0 -18px 52px rgba(8, 16, 38, 0.26), var(--ios-glass-inner-glow);
