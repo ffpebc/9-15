@@ -2222,8 +2222,7 @@ export const DictionaryModal: React.FC<DictionaryModalProps> = React.memo(({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      cachedFullDatabaseEntries = null;
+    if (isOpen && !cachedFullDatabaseEntries) {
       setBankRev((r) => r + 1);
     }
   }, [isOpen]);
@@ -2572,3 +2571,6 @@ export const AppearanceModal: React.FC<AppearanceModalProps> = React.memo(({
     </SwipeableSheet>
   );
 });
+
+export const GlassSettingsModal = AppearanceModal;
+export type GlassSettingsModalProps = AppearanceModalProps;

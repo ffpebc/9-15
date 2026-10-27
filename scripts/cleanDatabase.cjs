@@ -183,12 +183,15 @@ function buildOptionsForSprint(task, pref, suff, ans) {
   if (a === "Ъ" || a === "Ь") return ["Ъ", "Ь"];
   if (a === "З" || a === "С") return ["З", "С"];
   if (a === "Ч" || a === "Щ") return ["Ч", "Щ"];
+  if (a === "Д" || a === "Т") return ["Д", "Т"];
+  if (a === "Б" || a === "П") return ["Б", "П"];
   if (t === "9") {
     if (a === "А" || a === "О") return ["А", "О"];
     if (a === "Ы" || (pLow.endsWith("ц") && a === "И")) return ["И", "Ы"];
     if (a === "Ё" || (/[жшчщ]$/.test(pLow) && a === "О")) return ["Ё", "О"];
     if (a === "У" || a === "Ю") return ["У", "Ю"];
     if (a === "Я") return ["Я", "Е"];
+    if (a === "Э") return ["Э", "Е"];
     return ["Е", "И"];
   }
   if (t === "10") {

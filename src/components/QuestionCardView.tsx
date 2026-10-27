@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   TrainerQuestion,
   cleanQuestionRule,
@@ -83,15 +83,15 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
 
     const shortExplanation = (question.explanation || liveMeta.rule || '').trim();
 
-    const commitAnswer = (ok: boolean, opt: string) => {
+    const commitAnswer = useCallback((ok: boolean, opt: string) => {
       clearTimers();
       setIsExiting(true);
       setTimeout(() => {
         onAnswer(ok, opt);
       }, 160);
-    };
+    }, [onAnswer]);
 
-    const handlePickOption = (opt: string) => {
+    const handlePickOption = useCallback((opt: string) => {
       if (isAnswered) return;
       setSelectedChoice(opt);
       const ok = opt === question.answer;
@@ -108,7 +108,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
       answerTimerRef.current = setTimeout(() => {
         onAnswer(ok, opt);
       }, advanceTime);
-    };
+    }, [isAnswered, question.answer, onAnswer]);
 
     const renderWordWithSlot = () => {
       const slotStateClass = !isAnswered ? '' : isCorrect ? 'ok' : 'bad';
@@ -399,25 +399,25 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
   // ==========================================================================
   // 5-Row FIPI Format (EГЭ Realistic Mode)
   // ==========================================================================
-  const toggleRow = (rowIdx1Based: number) => {
+  const toggleRow = useCallback((rowIdx1Based: number) => {
     if (fipiSubmitted) return;
     setFipiSelectedRows((prev) =>
       prev.includes(rowIdx1Based)
         ? prev.filter((r) => r !== rowIdx1Based)
         : [...prev, rowIdx1Based].sort((a, b) => a - b)
     );
-  };
+  }, [fipiSubmitted]);
 
-  const handleCheckFipi = () => {
+  const handleCheckFipi = useCallback(() => {
     if (fipiSubmitted || fipiSelectedRows.length === 0) return;
     setFipiSubmitted(true);
     const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
     const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
     const ok = userStr === correctStr;
     setFipiResultOk(ok);
-  };
+  }, [fipiSubmitted, fipiSelectedRows, question.correctIndices]);
 
-  const handleProceedFipi = () => {
+  const handleProceedFipi = useCallback(() => {
     const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
     const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
     const ok = userStr === correctStr;
@@ -425,7 +425,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
     setTimeout(() => {
       onAnswer(ok, userStr || '—');
     }, 180);
-  };
+  }, [fipiSelectedRows, question.correctIndices, onAnswer]);
 
   const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
   const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
