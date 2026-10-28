@@ -119,7 +119,17 @@ export default function App() {
   useEffect(() => {
     const onLoaded = () => setBankRev((r) => r + 1);
     window.addEventListener('ege-bank-loaded', onLoaded);
-    return () => window.removeEventListener('ege-bank-loaded', onLoaded);
+
+    const onFocusOut = () => {
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
+    };
+    window.addEventListener('focusout', onFocusOut);
+
+    return () => {
+      window.removeEventListener('ege-bank-loaded', onLoaded);
+      window.removeEventListener('focusout', onFocusOut);
+    };
   }, []);
   const bank = useMemo(() => getTrainerBank(), [bankRev]);
 
@@ -370,6 +380,8 @@ export default function App() {
   }, [activeTab, sprintGameMode, blitzFinished]);
 
   const resetViewportOnBlur = useCallback(() => {
+    window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
     const vp = document.querySelector('meta[name="viewport"]');
     if (vp) {
       vp.setAttribute(

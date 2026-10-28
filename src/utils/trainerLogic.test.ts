@@ -455,3 +455,67 @@ test('Task 13 and Task 14 linguistic and classification fixes (Photos 1, 2, 3)',
   }
 });
 
+test('Task 13 multi-answer integrity, correctIndices alignment, and zero illegal СЛИТНО spellings', () => {
+  const bank = getTrainerBank();
+
+  // 1. Verify specific healed Task 13 questions
+  const q54722 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-54722');
+  assert.ok(q54722);
+  assert.deepEqual(q54722.correctIndices, [2, 4, 5]);
+
+  const q66995 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-66995');
+  assert.ok(q66995);
+  assert.deepEqual(q66995.correctIndices, [2, 3]);
+
+  const q42727 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-umschool-13-42727');
+  assert.ok(q42727);
+  assert.deepEqual(q42727.correctIndices, [1, 2, 5]);
+
+  const q18613 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-18613');
+  assert.ok(q18613);
+  assert.deepEqual(q18613.correctIndices, [1, 2, 4]);
+
+  // 2. All Task 13 questions must have correctIndices that match their rows where isCorrectRow === true
+  for (const q of bank.fipiQuestions) {
+    if (q.task === '13') {
+      const derivedIndices = q.rows
+        .map((r, i) => (r.isCorrectRow ? i + 1 : null))
+        .filter((x): x is number => x !== null);
+      assert.deepEqual(
+        q.correctIndices,
+        derivedIndices,
+        `Task 13 question ${q.id} correctIndices [${q.correctIndices}] does not match rows isCorrectRow [${derivedIndices}]`
+      );
+      assert.ok(
+        q.correctIndices.length >= 2 && q.correctIndices.length <= 4,
+        `Task 13 question ${q.id} has invalid number of correct answers (${q.correctIndices.length}) for standard 2-4 KIM answer format`
+      );
+    }
+  }
+
+  // 3. Zero instances of illegal СЛИТНО with verbs, short participles, comparatives in sprint questions
+  const illegalSplitPatterns = [
+    /^НЕ\s+(?:БЫЛ|СОБИРАЛСЯ|МОГ|ЗНАЛ|ВИДЕЛ|ПРИЗНАТЬСЯ)$/i,
+    /^НЕ\s+(?:СВАРЕН|ПРОЧИТАН|ВЗЯТА|ЗАКРЫТА|ЗАКРУЧЕНА|РАЗЛИТ|ВЫПОЛНЕНЫ|НАСТРОЕНА)$/i,
+    /^НЕ\s+(?:ВЫШЕ|МЕНЬШЕ|ГРОМЧЕ|ЯРЧЕ|БОЛЬШЕ)$/i,
+    /^НЕ\s+ПО-[А-ЯЁ]+/i,
+    /^НЕ\s+(?:КАЖДЫЙ|ВСЕ|ТОЙ)$/i,
+    /^НЕ\s+РАЗ$/i,
+  ];
+
+  for (const s of bank.sprintQuestions) {
+    if (s.task === '13') {
+      const fullWord = `${s.prefix || ''}${s.suffix || ''}`.replace(/[()]/g, '').trim().toUpperCase();
+      for (const pat of illegalSplitPatterns) {
+        if (pat.test(fullWord)) {
+          assert.equal(
+            s.answer,
+            'РАЗДЕЛЬНО',
+            `Sprint question ${s.id} for "${fullWord}" must have answer РАЗДЕЛЬНО, but got ${s.answer}`
+          );
+        }
+      }
+    }
+  }
+});
+

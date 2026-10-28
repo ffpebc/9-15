@@ -947,7 +947,7 @@ export function parseStructuredExplanation(
     );
 
   // Extract checkWord (проверочное слово / инфинитив) — strictly for Tasks 9 and 12 ONLY
-  const isCheckWordEligible = !task || task === '9' || task === '12';
+  const isCheckWordEligible = task === '9' || task === '12';
   if (isCheckWordEligible) {
     const cwMatch1 = ruleNote.match(
       /(?:проверочное слово|проверка|проверяется словом|где гласная стоит под ударением)[:—\-–\s]+[«"']?([А-Яа-яЁё\u0300-\u036f]+)[»"']?/i
