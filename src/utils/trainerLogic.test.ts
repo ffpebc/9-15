@@ -377,7 +377,81 @@ test('FIPI Task 14 explanations have zero contradictory hyphenated rules and ded
     }
   }
 });
+test('Task 13 and Task 14 linguistic and classification fixes (Photos 1, 2, 3)', () => {
+  const bank = getTrainerBank();
 
+  // Photo 1: В КОНЦЕ КОНЦОВ is always separate (РАЗДЕЛЬНО)
+  const fipi130924 = bank.fipiQuestions.find((q) => q.id === 'fipi-14-shkolkovo-14-130924');
+  assert.ok(fipi130924);
+  assert.equal(fipi130924.rows[0].letter, 'ДЕФИСНО / РАЗДЕЛЬНО');
+  assert.equal(fipi130924.rows[0].isCorrectRow, false);
+  assert.ok(fipi130924.rows[0].solvedWords[0].includes('В КОНЦЕ КОНЦОВ'));
+  assert.ok(fipi130924.rows[0].explanation.includes('В КОНЦЕ КОНЦОВ'));
 
+  for (const s of bank.sprintQuestions) {
+    const full = `${s.prefix || ''}${s.suffix || ''}`.replace(/[()]/g, '').trim().toUpperCase();
+    if (full.includes('КОНЦЕКОНЦОВ') || full === 'В КОНЦЕ КОНЦОВ') {
+      assert.equal(s.answer, 'РАЗДЕЛЬНО', `Sprint ${s.id} with В КОНЦЕ КОНЦОВ must have answer РАЗДЕЛЬНО`);
+    }
+  }
 
+  // Photo 2: СОРОКАМИНУТНЫЙ is a compound numeral adjective, not a preposition
+  const spSorok = bank.sprintQuestions.find((s) => s.id === 'sp-14-neofamily-14-50547-r3-w1');
+  if (spSorok) {
+    assert.equal(spSorok.topic, 'Сложные прилагательные (слитно)');
+    assert.ok(spSorok.explanation.includes('сложное прилагательное'));
+    assert.equal(spSorok.explanation.includes('наречие, производный предлог или союз'), false);
+  }
+
+  // Photo 3: НЕ ВЫХОДЯЩИМИ has dependent phrase «за пределы простейших ощущений» -> РАЗДЕЛЬНО with zero contradictions
+  const fipi54722 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-54722');
+  assert.ok(fipi54722);
+  const r3 = fipi54722.rows[2];
+  assert.equal(r3.letter, 'РАЗДЕЛЬНО');
+  assert.equal(r3.isCorrectRow, false);
+  assert.ok(r3.solvedWords[0].includes('НЕ ВЫХОДЯЩИМИ'));
+  assert.ok(r3.explanation.includes('зависимым'));
+  assert.equal(r3.explanation.includes('нет зависимых'), false);
+
+  const sp54722 = bank.sprintQuestions.find((s) => s.id === 'sp-13-neofamily-13-54722-r3-w1');
+  if (sp54722) {
+    assert.equal(sp54722.answer, 'РАЗДЕЛЬНО');
+    assert.equal(sp54722.topic, 'Полные причастия с зависимыми словами (раздельно)');
+    assert.equal(sp54722.explanation.includes('нет зависимых'), false);
+  }
+
+  // Verification: zero occurrences of placeholder in Task 14 FIPI and sprint
+  for (const q of bank.fipiQuestions) {
+    if (q.task === '14') {
+      for (const r of q.rows) {
+        assert.equal(
+          r.explanation.includes('наречие, производный предлог или союз'),
+          false,
+          `FIPI ${q.id} still has placeholder in explanation: ${r.explanation}`
+        );
+      }
+    }
+  }
+
+  // Verification: zero contradictions between dependent word/contrast and СЛИТНО in Task 13
+  for (const q of bank.fipiQuestions) {
+    if (q.task === '13') {
+      for (let i = 0; i < q.rows.length; i++) {
+        const r = q.rows[i];
+        if (r.letter === 'СЛИТНО') {
+          assert.equal(
+            r.explanation.includes('есть зависимое слово') || r.explanation.includes('есть зависимые слова'),
+            false,
+            `Task 13 contradiction in ${q.id} row ${i + 1}: marked СЛИТНО but mentions dependent word`
+          );
+          assert.equal(
+            r.explanation.includes('есть противопоставление'),
+            false,
+            `Task 13 contradiction in ${q.id} row ${i + 1}: marked СЛИТНО but mentions противопоставление`
+          );
+        }
+      }
+    }
+  }
+});
 

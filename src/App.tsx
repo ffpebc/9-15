@@ -949,7 +949,7 @@ export default function App() {
 
       {/* Main Viewport Scroll Container */}
       <div id="app-scroll-container" className="ios-viewport-scroll">
-        <main className="max-w-[600px] mx-auto px-3.5 pt-0.5 relative overflow-x-clip">
+        <main className="max-w-[600px] mx-auto px-3.5 pt-0.5 relative overflow-x-clip min-h-full flex-1 flex flex-col w-full">
           <AnimatePresence initial={false} custom={tabDirection} mode="popLayout">
             {/* ======================================================================
                 TAB 1: WORKOUT BUILDER, ACTIVE WORKOUT & POST-SESSION SUMMARY
@@ -959,6 +959,7 @@ export default function App() {
                 key="tab-workout"
                 id="screen-workout"
                 aria-label="Конструктор занятия"
+                className="min-h-full flex-1 flex flex-col w-full"
                 custom={tabDirection}
                 variants={iosScreenSlideVariants}
                 initial="enter"
@@ -1501,6 +1502,7 @@ export default function App() {
                 key="tab-sprint"
                 id="screen-sprint"
                 aria-label="Быстрый спринт"
+                className="min-h-full flex-1 flex flex-col w-full"
                 custom={tabDirection}
                 variants={iosScreenSlideVariants}
                 initial="enter"
@@ -1651,6 +1653,7 @@ export default function App() {
                 key="tab-lab"
                 id="screen-lab"
                 aria-label="Лаборатория 9–15"
+                className="min-h-full flex-1 flex flex-col w-full"
                 custom={tabDirection}
                 variants={iosScreenSlideVariants}
                 initial="enter"
@@ -2405,6 +2408,7 @@ export default function App() {
                 key="tab-errors"
                 id="screen-errors"
                 aria-label="Банк ошибок"
+                className="min-h-full flex-1 flex flex-col w-full"
                 custom={tabDirection}
                 variants={iosScreenSlideVariants}
                 initial="enter"
@@ -2564,6 +2568,7 @@ export default function App() {
                 key="tab-stats"
                 id="screen-stats"
                 aria-label="Статистика"
+                className="min-h-full flex-1 flex flex-col w-full"
                 custom={tabDirection}
                 variants={iosScreenSlideVariants}
                 initial="enter"

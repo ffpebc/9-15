@@ -202,7 +202,10 @@ body::before {
 
 .ios-viewport-scroll {
   width: 100%;
+  height: 100vh;
   height: 100dvh;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -215,12 +218,14 @@ body::before {
 /* Screen Stack tuned for iPhone 16 (393 x 852 pt) — Controlled by Framer Motion Spring Slide */
 .ios-screen-stack {
   min-height: calc(
-    100dvh - env(safe-area-inset-top, 0px) - max(6px, calc(env(safe-area-inset-bottom, 0px) - 18px)) - 126px
+    100dvh - env(safe-area-inset-top, 0px) - max(6px, env(safe-area-inset-bottom, 0px) - 18px) - 126px
   );
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
 }
 
 /* ============================================================================
