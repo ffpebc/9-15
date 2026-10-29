@@ -993,16 +993,20 @@ export function parseStructuredExplanation(
       const isParticiple =
         /причаст/i.test(ruleNote) ||
         /(?:ущ|ющ|ащ|ящ|вш|ш|ем|им|ом|енн|ённ|анн|янн|т)(?:ый|ая|ое|ые|ого|ому|ым|им|ом|ем|ую|юю|ой|ей|ых|их|ыми|ими)(?:ся|сь)?$/i.test(targetLower);
+      const isAdjective =
+        /прилагательн/i.test(ruleNote) ||
+        /(?:[нлвскгхмтпбдзжрчшщц]ая|[нлвскгхмтпбдзжрчшщц]яя|ое|ее|ый|ий|ой|ые|ие|ого|его|ому|ему|ым|им|ом|ем|ую|юю|ей|ых|их|ыми|ими)$/i.test(targetLower);
+
       if (isParticiple) {
         orthogramType = /зависим|противопоставл|раздельно/i.test(ruleNote)
           ? 'Полные причастия с зависимыми словами (раздельно)'
           : /кратк/i.test(ruleNote)
           ? 'Краткие причастия с НЕ (всегда раздельно)'
           : 'Одиночные причастия с НЕ (слитно)';
-      } else if (/деепричаст/i.test(ruleNote) || /(?:[аяыи]я|[аяу]чи)(?:ся|сь)?$/i.test(targetLower)) {
-        orthogramType = 'Правописание НЕ с деепричастиями';
-      } else if (/прилагательн/i.test(ruleNote)) {
+      } else if (isAdjective) {
         orthogramType = 'Правописание НЕ с прилагательными';
+      } else if (/деепричаст/i.test(ruleNote) || /(?:[аеёиоуыэюя]я|[жшчщ]а|[аяу]чи|вши?|вшись)(?:ся|сь)?$/i.test(targetLower)) {
+        orthogramType = 'Правописание НЕ с деепричастиями';
       } else if (/существительн/i.test(ruleNote)) {
         orthogramType = 'Правописание НЕ с существительными';
       } else if (/глагол/i.test(ruleNote)) {
@@ -1094,7 +1098,7 @@ export function parseStructuredExplanation(
   }
   if (stepBuf.trim()) rawSteps.push(stepBuf.trim());
 
-  const steps = rawSteps
+  let steps = rawSteps
     .map((st) => {
       let cleanSt = st.replace(/^[,;.\s—–-]+|[,;.\s]+$/g, '').trim();
       if (!cleanSt) return '';
@@ -1102,6 +1106,63 @@ export function parseStructuredExplanation(
       return cleanSt.charAt(0).toUpperCase() + cleanSt.slice(1);
     })
     .filter(Boolean);
+
+  // Filter out contradictory steps and sanitize conclusions
+  if (task === '13') {
+    const hasDependentWord = steps.some((s) =>
+      /зависим(?:ым|ого|ые|ых|ое)\s+слов|причасти[ея]\s+с\s+зависим|наличии\s+зависимых/i.test(s)
+    );
+    const hasOpposition = steps.some((s) =>
+      /противопоставлен(?:ие|ием|ия)\s+с\s+союзом\s+«?А»?|прямым\s+противопоставлением/i.test(s)
+    );
+
+    if (hasDependentWord) {
+      steps = steps.filter(
+        (s) =>
+          !/нет\s+зависимых|отсутстви[еи]\s+зависимых/i.test(s) &&
+          !/нет\s+противопоставления\s+с\s+союзом\s+«?А»?,\s*зависимых/i.test(s) &&
+          !/пишется\s+СЛИТНО/i.test(s)
+      );
+      if (!steps.some((s) => /пишется\s+РАЗДЕЛЬНО/i.test(s))) {
+        steps.push(`Поэтому пишется РАЗДЕЛЬНО${targetWord ? ` — «${targetWord}»` : ''}.`);
+      }
+    } else if (hasOpposition) {
+      steps = steps.filter(
+        (s) =>
+          !/нет\s+противопоставления/i.test(s) &&
+          !/пишется\s+СЛИТНО/i.test(s)
+      );
+      if (!steps.some((s) => /пишется\s+РАЗДЕЛЬНО/i.test(s))) {
+        steps.push(`Поэтому пишется РАЗДЕЛЬНО${targetWord ? ` — «${targetWord}»` : ''}.`);
+      }
+    }
+  } else if (task === '14') {
+    const nonHyphenWords = [
+      'ПОЭТОМУ', 'ПОТОМУ', 'ПОЧЕМУ', 'ПОСКОЛЬКУ', 'ОТТОГО', 'ОТЧЕГО',
+      'ЗАТО', 'ТАКЖЕ', 'ТОЖЕ', 'ЧТОБЫ', 'ВВИДУ', 'НАЗАВТРА', 'ВСЛЕДСТВИЕ',
+      'НАВСТРЕЧУ', 'НАПОДОБИЕ', 'ПОНЕМНОГУ'
+    ];
+    const upperTarget = (targetWord || '').replace(/[-()]/g, '').toUpperCase();
+    if (nonHyphenWords.includes(upperTarget)) {
+      steps = steps.filter(
+        (s) =>
+          !/такие\s+наречия\s+всегда\s+пишутся\s+через\s+дефис/i.test(s) &&
+          !/ЧЕРЕЗ\s+ДЕФИС/i.test(s)
+      );
+      if (!steps.some((s) => /пишется\s+СЛИТНО/i.test(s))) {
+        steps.push(`Поэтому пишется СЛИТНО — «${targetWord}».`);
+      }
+    }
+  }
+
+  // Deduplicate identical steps
+  const seenSteps = new Set<string>();
+  steps = steps.filter((s) => {
+    const key = s.trim().toLowerCase();
+    if (seenSteps.has(key)) return false;
+    seenSteps.add(key);
+    return true;
+  });
 
   ruleNote = steps.join(' ');
 

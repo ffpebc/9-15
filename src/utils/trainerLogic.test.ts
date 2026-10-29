@@ -19,6 +19,7 @@ import {
   cleanQuestionRule,
   resolveTask15Sentence,
 } from './trainerLogic.ts';
+import { parseStructuredExplanation } from '../components/WorkWindows.tsx';
 
 test('FIPI bank generates sprint questions + FIPI sets + KIM variants + flashcards & homophones', () => {
   const bank = getTrainerBank();
@@ -518,4 +519,83 @@ test('Task 13 multi-answer integrity, correctIndices alignment, and zero illegal
     }
   }
 });
+
+test('Photos 1, 2, 3, 4, 5 regression tests & structured explanation sanitization', () => {
+  const bank = getTrainerBank();
+
+  // Photo 1: (НЕ)РАССЛЫШАННЫЙ преподавателем -> РАЗДЕЛЬНО with zero self-contradiction
+  const fipi49277 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-49277');
+  assert.ok(fipi49277);
+  const p1Row = fipi49277.rows.find((r) => r.words[0].includes('РАССЛЫШАННЫЙ'));
+  assert.ok(p1Row);
+  assert.equal(p1Row.letter, 'РАЗДЕЛЬНО');
+  assert.equal(p1Row.explanation.includes('нет зависимых'), false);
+  assert.equal(p1Row.explanation.includes('пишется СЛИТНО'), false);
+  assert.ok(p1Row.explanation.includes('зависимым'));
+
+  // Photo 2: (НЕ)ДОЖДАВШИЕСЯ ужина -> РАЗДЕЛЬНО
+  const fipi37254 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-37254');
+  assert.ok(fipi37254);
+  const p2Row = fipi37254.rows.find((r) => r.words[0].includes('ДОЖДАВШИЕСЯ'));
+  assert.ok(p2Row);
+  assert.equal(p2Row.letter, 'РАЗДЕЛЬНО');
+  assert.equal(p2Row.explanation.includes('нет зависимых'), false);
+  assert.equal(p2Row.explanation.includes('пишется СЛИТНО'), false);
+
+  // Photo 3: (НА)ЗАВТРА ... (ПО)ЭТОМУ -> СЛИТНО, zero hyphen claims
+  const fipi29683 = bank.fipiQuestions.find((q) => q.id === 'fipi-14-neofamily-14-29683');
+  assert.ok(fipi29683);
+  const p3Row = fipi29683.rows.find((r) => r.words[0].includes('НАЗАВТРА') || r.words[0].includes('(НА)ЗАВТРА'));
+  assert.ok(p3Row);
+  assert.equal(p3Row.letter, 'СЛИТНО');
+  assert.equal(p3Row.explanation.includes('через дефис'), false);
+  assert.equal(p3Row.explanation.includes('ДЕФИС'), false);
+
+  // Photo 4: ИНЖЕНЕРОМ(ТЕХНОЛОГОМ) -> ДЕФИСНО
+  const spCompound = bank.sprintQuestions.find((s) => s.id === 'sp-14-neofamily-14-50045-r3-w1');
+  assert.ok(spCompound);
+  assert.equal(spCompound.answer, 'ДЕФИСНО');
+  assert.equal(spCompound.prefix, '(ИНЖЕНЕРОМ)');
+  assert.equal(spCompound.suffix, 'ТЕХНОЛОГОМ');
+  assert.ok(spCompound.options.includes('ДЕФИСНО'));
+
+  // Photo 5: (НЕ)ХРУСТАЛЬНАЯ -> РАЗДЕЛЬНО, topic & category "Правописание НЕ с прилагательными"
+  const fipi47871 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-47871');
+  assert.ok(fipi47871);
+  const p5Row = fipi47871.rows.find((r) => r.words[0].includes('ХРУСТАЛЬНАЯ'));
+  assert.ok(p5Row);
+  assert.equal(p5Row.letter, 'РАЗДЕЛЬНО');
+  assert.ok(p5Row.explanation.includes('противопоставлением'));
+
+  const sp47871 = bank.sprintQuestions.find((s) => s.id === 'sp-13-neofamily-13-47871-r3-w1');
+  assert.ok(sp47871);
+  assert.equal(sp47871.answer, 'РАЗДЕЛЬНО');
+  assert.equal(sp47871.topic, 'Правописание НЕ с прилагательными');
+
+  // Verify parseStructuredExplanation in WorkWindows: feminine adjective must NOT be gerund
+  const parsedAdj = parseStructuredExplanation('НЕ ХРУСТАЛЬНАЯ — относительное прилагательное', 'нехрустальная', '13');
+  assert.equal(parsedAdj.orthogramType, 'Правописание НЕ с прилагательными');
+
+  // Verify step contradiction sanitization in parseStructuredExplanation
+  const parsedContradiction = parseStructuredExplanation(
+    'НЕ РАССЛЫШАННЫЙ — полное причастие с зависимым словом; нет зависимых слов; поэтому пишется СЛИТНО — «НЕ РАССЛЫШАННЫЙ».',
+    'НЕ РАССЛЫШАННЫЙ',
+    '13'
+  );
+  assert.ok(parsedContradiction.steps);
+  assert.equal(parsedContradiction.steps.some((s) => s.includes('нет зависимых')), false);
+  assert.equal(parsedContradiction.steps.some((s) => s.includes('СЛИТНО')), false);
+  assert.ok(parsedContradiction.steps.some((s) => s.includes('РАЗДЕЛЬНО')));
+
+  // Verify Task 14 hyphen sanitization in parseStructuredExplanation
+  const parsedT14 = parseStructuredExplanation(
+    'ПОЭТОМУ — такие наречия всегда пишутся через дефис; поэтому пишется ЧЕРЕЗ ДЕФИС — «ПОЭТОМУ».',
+    'ПОЭТОМУ',
+    '14'
+  );
+  assert.ok(parsedT14.steps);
+  assert.equal(parsedT14.steps.some((s) => s.includes('дефис')), false);
+  assert.ok(parsedT14.steps.some((s) => s.includes('СЛИТНО')));
+});
+
 

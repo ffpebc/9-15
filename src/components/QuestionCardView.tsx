@@ -150,20 +150,18 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
 
         if (!isAnswered) {
           return (
-            <div className="text-[23px] sm:text-[27px] font-extrabold tracking-tight leading-snug text-center my-2">
+            <div className="text-[20px] sm:text-[25px] font-extrabold tracking-tight leading-snug text-center my-2 flex flex-wrap items-center justify-center gap-1.5">
               {leadText && (
-                <span className="opacity-80 font-medium mr-1.5 align-middle">
+                <span className="opacity-80 font-medium align-middle">
                   {leadText}
                 </span>
               )}
-              <span className="whitespace-nowrap inline-flex items-center align-middle">
-                <span className="slot-gap !min-w-[42px] !px-2 font-black">
-                  ({parenWord})
-                </span>
-                <span>{targetWordRest}</span>
+              <span className="slot-gap !min-w-[42px] !px-2.5 font-black inline-flex items-center justify-center flex-wrap gap-1 align-middle">
+                <span>({parenWord})</span>
+                {targetWordRest && <span>{targetWordRest}</span>}
               </span>
               {remainingSentence && (
-                <span className="opacity-85 font-medium text-[19px] sm:text-[22px] ml-1.5 align-middle">
+                <span className="opacity-85 font-medium text-[18px] sm:text-[21px] align-middle">
                   {remainingSentence}
                 </span>
               )}
@@ -174,36 +172,19 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
         const isSlitno = question.answer === 'СЛИТНО';
         const isDefisno = question.answer === 'ДЕФИСНО';
         return (
-          <div className="text-[23px] sm:text-[27px] font-extrabold tracking-tight leading-snug text-center my-2">
+          <div className="text-[20px] sm:text-[25px] font-extrabold tracking-tight leading-snug text-center my-2 flex flex-wrap items-center justify-center gap-1.5">
             {leadText && (
-              <span className="opacity-80 font-medium mr-1.5 align-middle">
+              <span className="opacity-80 font-medium align-middle">
                 {leadText}
               </span>
             )}
-            <span className="whitespace-nowrap inline-flex items-center align-middle">
-              {isSlitno && (
-                <span className={`slot-gap !min-w-0 !px-2.5 font-black ${slotStateClass}`}>
-                  {parenWord}{targetWordRest}
-                </span>
-              )}
-              {isDefisno && (
-                <span className={`slot-gap !min-w-0 !px-2.5 font-black ${slotStateClass}`}>
-                  {parenWord}-{targetWordRest}
-                </span>
-              )}
-              {!isSlitno && !isDefisno && (
-                <>
-                  <span className={`slot-gap !min-w-0 !px-2 font-black ${slotStateClass}`}>
-                    {parenWord}
-                  </span>
-                  <span className="ml-1.5 font-black align-middle">
-                    {targetWordRest}
-                  </span>
-                </>
-              )}
+            <span className={`slot-gap !min-w-0 !px-3 font-black inline-flex items-center justify-center flex-wrap align-middle ${slotStateClass}`}>
+              {isSlitno && `${parenWord}${targetWordRest}`}
+              {isDefisno && `${parenWord}-${targetWordRest}`}
+              {!isSlitno && !isDefisno && `${parenWord} ${targetWordRest}`}
             </span>
             {remainingSentence && (
-              <span className="opacity-85 font-medium text-[19px] sm:text-[22px] ml-1.5 align-middle">
+              <span className="opacity-85 font-medium text-[18px] sm:text-[21px] align-middle">
                 {remainingSentence}
               </span>
             )}
