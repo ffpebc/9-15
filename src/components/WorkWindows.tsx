@@ -995,7 +995,7 @@ export function parseStructuredExplanation(
         /(?:ущ|ющ|ащ|ящ|вш|ш|ем|им|ом|енн|ённ|анн|янн|т)(?:ый|ая|ое|ые|ого|ому|ым|им|ом|ем|ую|юю|ой|ей|ых|их|ыми|ими)(?:ся|сь)?$/i.test(targetLower);
       const isAdjective =
         /прилагательн/i.test(ruleNote) ||
-        /(?:[нлвскгхмтпбдзжрчшщц]ая|[нлвскгхмтпбдзжрчшщц]яя|ое|ее|ый|ий|ой|ые|ие|ого|его|ому|ему|ым|им|ом|ем|ую|юю|ей|ых|их|ыми|ими)$/i.test(targetLower);
+        /(?:[а-яё]ая|[а-яё]яя|[а-яё]ья|ое|ее|ый|ий|ой|ые|ие|ого|его|ому|ему|ым|им|ом|ем|ую|юю|ей|ых|их|ыми|ими)$/i.test(targetLower);
 
       if (isParticiple) {
         orthogramType = /зависим|противопоставл|раздельно/i.test(ruleNote)
@@ -1005,7 +1005,12 @@ export function parseStructuredExplanation(
           : 'Одиночные причастия с НЕ (слитно)';
       } else if (isAdjective) {
         orthogramType = 'Правописание НЕ с прилагательными';
-      } else if (/деепричаст/i.test(ruleNote) || /(?:[аеёиоуыэюя]я|[жшчщ]а|[аяу]чи|вши?|вшись)(?:ся|сь)?$/i.test(targetLower)) {
+      } else if (
+        !isAdjective &&
+        (/деепричаст/i.test(ruleNote) ||
+          (/(?:[аеёиоуыэюя]ясь?|[жшчщ]ась?|[аяу]чи|вши?|вшись)$/i.test(targetLower) &&
+            !/(?:ая|яя|ое|ее|ый|ий|ой|ые|ие)$/i.test(targetLower)))
+      ) {
         orthogramType = 'Правописание НЕ с деепричастиями';
       } else if (/существительн/i.test(ruleNote)) {
         orthogramType = 'Правописание НЕ с существительными';
@@ -1110,11 +1115,16 @@ export function parseStructuredExplanation(
   // Filter out contradictory steps and sanitize conclusions
   if (task === '13') {
     const hasDependentWord = steps.some((s) =>
-      /зависим(?:ым|ого|ые|ых|ое)\s+слов|причасти[ея]\s+с\s+зависим|наличии\s+зависимых/i.test(s)
+      /(?:есть\s+зависим|наличи[еи]\s+зависим|(?:полное\s+)?причасти[ея]\s+с\s+зависим|зависим(?:ым|ого|ые|ых|ое)\s+слов(?:ом|а|ам|ами|ах)?\s*[«\-(])/i.test(s) &&
+      !/(?:нет|отсутстви[еи]|не\s+имеет|без)\s+зависим/i.test(s)
     );
     const hasOpposition = steps.some((s) =>
-      /противопоставлен(?:ие|ием|ия)\s+с\s+союзом\s+«?А»?|прямым\s+противопоставлением/i.test(s)
+      /(?:есть|наличи[еи]|прямым|с\s+прямым)\s+противопоставлен/i.test(s) &&
+      !/(?:нет|отсутстви[еи]|без)\s+противопоставлен/i.test(s)
     );
+
+    const cleanTarget = (targetWord || '').replace(/[()]/g, '').trim();
+    const splitTarget = cleanTarget.startsWith('НЕ ') ? cleanTarget : cleanTarget.replace(/^НЕ(?=[А-ЯЁа-яё])/i, 'НЕ ');
 
     if (hasDependentWord) {
       steps = steps.filter(
@@ -1124,7 +1134,7 @@ export function parseStructuredExplanation(
           !/пишется\s+СЛИТНО/i.test(s)
       );
       if (!steps.some((s) => /пишется\s+РАЗДЕЛЬНО/i.test(s))) {
-        steps.push(`Поэтому пишется РАЗДЕЛЬНО${targetWord ? ` — «${targetWord}»` : ''}.`);
+        steps.push(`Поэтому пишется РАЗДЕЛЬНО${splitTarget ? ` — «${splitTarget}»` : ''}.`);
       }
     } else if (hasOpposition) {
       steps = steps.filter(
@@ -1133,24 +1143,27 @@ export function parseStructuredExplanation(
           !/пишется\s+СЛИТНО/i.test(s)
       );
       if (!steps.some((s) => /пишется\s+РАЗДЕЛЬНО/i.test(s))) {
-        steps.push(`Поэтому пишется РАЗДЕЛЬНО${targetWord ? ` — «${targetWord}»` : ''}.`);
+        steps.push(`Поэтому пишется РАЗДЕЛЬНО${splitTarget ? ` — «${splitTarget}»` : ''}.`);
       }
     }
   } else if (task === '14') {
     const nonHyphenWords = [
       'ПОЭТОМУ', 'ПОТОМУ', 'ПОЧЕМУ', 'ПОСКОЛЬКУ', 'ОТТОГО', 'ОТЧЕГО',
       'ЗАТО', 'ТАКЖЕ', 'ТОЖЕ', 'ЧТОБЫ', 'ВВИДУ', 'НАЗАВТРА', 'ВСЛЕДСТВИЕ',
-      'НАВСТРЕЧУ', 'НАПОДОБИЕ', 'ПОНЕМНОГУ'
+      'НАВСТРЕЧУ', 'НАПОДОБИЕ', 'ПОНЕМНОГУ', 'СНАЧАЛА', 'ВНАЧАЛЕ', 'ИТАК'
     ];
     const upperTarget = (targetWord || '').replace(/[-()]/g, '').toUpperCase();
-    if (nonHyphenWords.includes(upperTarget)) {
-      steps = steps.filter(
-        (s) =>
-          !/такие\s+наречия\s+всегда\s+пишутся\s+через\s+дефис/i.test(s) &&
-          !/ЧЕРЕЗ\s+ДЕФИС/i.test(s)
-      );
-      if (!steps.some((s) => /пишется\s+СЛИТНО/i.test(s))) {
-        steps.push(`Поэтому пишется СЛИТНО — «${targetWord}».`);
+    for (const nh of nonHyphenWords) {
+      const mentionsNH = steps.some((s) => s.toUpperCase().includes(nh)) || upperTarget.includes(nh);
+      if (mentionsNH) {
+        steps = steps.filter((s) => {
+          const isBogusHyphenRule = /такие\s+наречия\s+всегда\s+пишутся\s+через\s+дефис/i.test(s);
+          const isBogusHyphenConclusion = /через\s+дефис/i.test(s) && s.toUpperCase().includes(nh);
+          return !isBogusHyphenRule && !isBogusHyphenConclusion;
+        });
+        if (upperTarget === nh && !steps.some((s) => /пишется\s+СЛИТНО/i.test(s))) {
+          steps.push(`Поэтому пишется СЛИТНО — «${nh}».`);
+        }
       }
     }
   }

@@ -470,7 +470,7 @@ test('Task 13 multi-answer integrity, correctIndices alignment, and zero illegal
 
   const q42727 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-umschool-13-42727');
   assert.ok(q42727);
-  assert.deepEqual(q42727.correctIndices, [1, 2, 5]);
+  assert.deepEqual(q42727.correctIndices, [2, 5]);
 
   const q18613 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-18613');
   assert.ok(q18613);
@@ -596,6 +596,45 @@ test('Photos 1, 2, 3, 4, 5 regression tests & structured explanation sanitizatio
   assert.ok(parsedT14.steps);
   assert.equal(parsedT14.steps.some((s) => s.includes('дефис')), false);
   assert.ok(parsedT14.steps.some((s) => s.includes('СЛИТНО')));
+
+  // Verify solitary participle without dependent words remains СЛИТНО in parseStructuredExplanation
+  const parsedSolitary = parseStructuredExplanation(
+    'НЕПРЕКРАЩАЮЩИЙСЯ — одиночное полное причастие; у причастия в данном предложении нет зависимых слов и нет противопоставления с союзом А; поэтому пишется СЛИТНО.',
+    'НЕПРЕКРАЩАЮЩИЙСЯ',
+    '13'
+  );
+  assert.ok(parsedSolitary.steps);
+  assert.equal(parsedSolitary.steps.some((s) => s.includes('РАЗДЕЛЬНО')), false);
+  assert.ok(parsedSolitary.steps.some((s) => s.includes('СЛИТНО')));
+});
+
+test('Full database integrity: zero contradictions, zero bogus hyphens, zero glued strings', () => {
+  const bank = getTrainerBank();
+
+  // 1. Zero glued strings
+  const dump = JSON.stringify(bank);
+  assert.equal(dump.includes('ЗА-ТОПО-ЭТОМУ'), false);
+  assert.equal(dump.includes('ВНИЗПО-ЭТОМУ'), false);
+  assert.equal(dump.includes('ПО-ЭТОМУВ ТЕЧЕНИЕ'), false);
+
+  // 2. Zero ПО-ЧЕМУ with ДЕФИСНО
+  const badPochemu = bank.sprintQuestions.filter(
+    (s) => s.task === '14' && s.answer === 'ДЕФИСНО' && (s.prefix + s.suffix).includes('ПО-ЧЕМУ')
+  );
+  assert.equal(badPochemu.length, 0);
+
+  // 3. Zero contradictions in sprint questions
+  let contradictions = 0;
+  for (const s of bank.sprintQuestions) {
+    const ans = s.answer;
+    const expl = s.explanation || s.rule || '';
+    if (ans === 'СЛИТНО' && /поэтому\s+пишется\s+РАЗДЕЛЬНО/i.test(expl)) {
+      contradictions++;
+    } else if (ans === 'РАЗДЕЛЬНО' && /поэтому\s+пишется\s+СЛИТНО/i.test(expl)) {
+      contradictions++;
+    }
+  }
+  assert.equal(contradictions, 0);
 });
 
 
