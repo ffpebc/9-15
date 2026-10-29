@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   TrainerQuestion,
   cleanQuestionRule,
@@ -8,6 +8,7 @@ import {
 } from '../utils/trainerLogic';
 import { classifyWordSubtopicAndException } from '../utils/wordClassifier';
 import { Task15SentenceView } from './Task15SentenceView';
+import { FormattedInstruction } from './FormattedInstruction';
 
 const SHORT_MORPHEME_BY_TASK: Record<TrainerQuestion['task'], string> = {
   '9': 'Корень слова',
@@ -83,15 +84,15 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
 
     const shortExplanation = (question.explanation || liveMeta.rule || '').trim();
 
-    const commitAnswer = useCallback((ok: boolean, opt: string) => {
+    const commitAnswer = (ok: boolean, opt: string) => {
       clearTimers();
       setIsExiting(true);
       setTimeout(() => {
         onAnswer(ok, opt);
       }, 160);
-    }, [onAnswer]);
+    };
 
-    const handlePickOption = useCallback((opt: string) => {
+    const handlePickOption = (opt: string) => {
       if (isAnswered) return;
       setSelectedChoice(opt);
       const ok = opt === question.answer;
@@ -108,7 +109,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
       answerTimerRef.current = setTimeout(() => {
         onAnswer(ok, opt);
       }, advanceTime);
-    }, [isAnswered, question.answer, onAnswer]);
+    };
 
     const renderWordWithSlot = () => {
       const slotStateClass = !isAnswered ? '' : isCorrect ? 'ok' : 'bad';
@@ -149,20 +150,18 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
 
         if (!isAnswered) {
           return (
-            <div className="text-[23px] sm:text-[27px] font-extrabold tracking-tight leading-snug text-center my-2">
+            <div className="text-[20px] sm:text-[25px] font-extrabold tracking-tight leading-snug text-center my-2 flex flex-wrap items-center justify-center gap-1.5">
               {leadText && (
-                <span className="opacity-80 font-medium mr-1.5 align-middle">
+                <span className="opacity-80 font-medium align-middle">
                   {leadText}
                 </span>
               )}
-              <span className="whitespace-nowrap inline-flex items-center align-middle">
-                <span className="slot-gap !min-w-[42px] !px-2 font-black">
-                  ({parenWord})
-                </span>
-                <span>{targetWordRest}</span>
+              <span className="slot-gap !min-w-[42px] !px-2.5 font-black inline-flex items-center justify-center flex-wrap gap-1 align-middle">
+                <span>({parenWord})</span>
+                {targetWordRest && <span>{targetWordRest}</span>}
               </span>
               {remainingSentence && (
-                <span className="opacity-85 font-medium text-[19px] sm:text-[22px] ml-1.5 align-middle">
+                <span className="opacity-85 font-medium text-[18px] sm:text-[21px] align-middle">
                   {remainingSentence}
                 </span>
               )}
@@ -173,36 +172,19 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
         const isSlitno = question.answer === 'СЛИТНО';
         const isDefisno = question.answer === 'ДЕФИСНО';
         return (
-          <div className="text-[23px] sm:text-[27px] font-extrabold tracking-tight leading-snug text-center my-2">
+          <div className="text-[20px] sm:text-[25px] font-extrabold tracking-tight leading-snug text-center my-2 flex flex-wrap items-center justify-center gap-1.5">
             {leadText && (
-              <span className="opacity-80 font-medium mr-1.5 align-middle">
+              <span className="opacity-80 font-medium align-middle">
                 {leadText}
               </span>
             )}
-            <span className="whitespace-nowrap inline-flex items-center align-middle">
-              {isSlitno && (
-                <span className={`slot-gap !min-w-0 !px-2.5 font-black ${slotStateClass}`}>
-                  {parenWord}{targetWordRest}
-                </span>
-              )}
-              {isDefisno && (
-                <span className={`slot-gap !min-w-0 !px-2.5 font-black ${slotStateClass}`}>
-                  {parenWord}-{targetWordRest}
-                </span>
-              )}
-              {!isSlitno && !isDefisno && (
-                <>
-                  <span className={`slot-gap !min-w-0 !px-2 font-black ${slotStateClass}`}>
-                    {parenWord}
-                  </span>
-                  <span className="ml-1.5 font-black align-middle">
-                    {targetWordRest}
-                  </span>
-                </>
-              )}
+            <span className={`slot-gap !min-w-0 !px-3 font-black inline-flex items-center justify-center flex-wrap align-middle ${slotStateClass}`}>
+              {isSlitno && `${parenWord}${targetWordRest}`}
+              {isDefisno && `${parenWord}-${targetWordRest}`}
+              {!isSlitno && !isDefisno && `${parenWord} ${targetWordRest}`}
             </span>
             {remainingSentence && (
-              <span className="opacity-85 font-medium text-[19px] sm:text-[22px] ml-1.5 align-middle">
+              <span className="opacity-85 font-medium text-[18px] sm:text-[21px] align-middle">
                 {remainingSentence}
               </span>
             )}
@@ -399,25 +381,25 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
   // ==========================================================================
   // 5-Row FIPI Format (EГЭ Realistic Mode)
   // ==========================================================================
-  const toggleRow = useCallback((rowIdx1Based: number) => {
+  const toggleRow = (rowIdx1Based: number) => {
     if (fipiSubmitted) return;
     setFipiSelectedRows((prev) =>
       prev.includes(rowIdx1Based)
         ? prev.filter((r) => r !== rowIdx1Based)
         : [...prev, rowIdx1Based].sort((a, b) => a - b)
     );
-  }, [fipiSubmitted]);
+  };
 
-  const handleCheckFipi = useCallback(() => {
+  const handleCheckFipi = () => {
     if (fipiSubmitted || fipiSelectedRows.length === 0) return;
     setFipiSubmitted(true);
     const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
     const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
     const ok = userStr === correctStr;
     setFipiResultOk(ok);
-  }, [fipiSubmitted, fipiSelectedRows, question.correctIndices]);
+  };
 
-  const handleProceedFipi = useCallback(() => {
+  const handleProceedFipi = () => {
     const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
     const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
     const ok = userStr === correctStr;
@@ -425,7 +407,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
     setTimeout(() => {
       onAnswer(ok, userStr || '—');
     }, 180);
-  }, [fipiSelectedRows, question.correctIndices, onAnswer]);
+  };
 
   const correctStr = question.correctIndices.slice().sort((a, b) => a - b).join('');
   const userStr = fipiSelectedRows.slice().sort((a, b) => a - b).join('');
@@ -463,11 +445,11 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
 
       {/* Official Instruction Box (especially for Task 13 and Task 15) */}
       <div
-        className="text-[12px] font-medium px-3 py-2 rounded-xl text-left leading-snug border border-[var(--ios-separator)] shadow-xs"
+        className="px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl text-left border border-[var(--ios-separator)] shadow-xs"
         style={{ background: 'var(--ios-bg-secondary)', color: 'var(--ios-label)' }}
       >
-        <div className="text-[12px] font-semibold leading-snug">
-          {cleanQuestionRule(question.rule, question.task)}
+        <div className="text-[14.5px] sm:text-[16px] font-semibold leading-relaxed">
+          <FormattedInstruction rule={question.rule} task={question.task} />
         </div>
       </div>
 
@@ -497,7 +479,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
             />
           </div>
 
-          {/* Task 15 Pure Digit Selector (1, 2, 3, 4... without duplicate words during choice) */}
+          {/* Task 15 Pure Digits (Round Circular Buttons 1, 2, 3, 4, 5 without words) */}
           <div className="flex flex-col gap-2 my-1">
             <div
               className="text-[11px] font-bold text-center uppercase tracking-wider opacity-65"
@@ -506,12 +488,12 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
               {fipiSubmitted ? 'Результат по номерам пропусков:' : 'Выберите цифры ответа:'}
             </div>
 
-            <div className="flex items-center justify-center gap-2 sm:gap-3 w-full max-w-sm mx-auto">
+            <div className="flex items-center justify-center gap-3 sm:gap-4 my-1 w-full max-w-sm mx-auto">
               {question.rows.map((row, idx) => {
                 const digit = idx + 1;
                 const isSelected = fipiSelectedRows.includes(digit);
-                let btnClass = 'flex-1 min-w-[50px] max-w-[76px] h-13 sm:h-14 rounded-2xl text-[20px] font-black flex items-center justify-center transition-all select-none shadow-xs active:scale-95 cursor-pointer';
-                let btnStyle: React.CSSProperties = {
+                let circleClass = 'w-12 h-12 sm:w-14 sm:h-14 rounded-full text-[19px] sm:text-[21px] font-black flex items-center justify-center transition-all select-none shadow-xs active:scale-95 cursor-pointer';
+                let circleStyle: React.CSSProperties = {
                   background: 'var(--ios-bg-secondary)',
                   color: 'var(--ios-label)',
                   border: '1.5px solid var(--ios-separator)',
@@ -519,25 +501,25 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
 
                 if (fipiSubmitted) {
                   if (row.isCorrectRow && isSelected) {
-                    btnStyle = {
+                    circleStyle = {
                       background: 'var(--ios-green-soft)',
                       color: 'var(--ios-green)',
                       border: '2px solid var(--ios-green)',
                     };
                   } else if (row.isCorrectRow && !isSelected) {
-                    btnStyle = {
+                    circleStyle = {
                       background: 'var(--ios-orange-soft)',
                       color: 'var(--ios-orange)',
                       border: '1.5px solid var(--ios-orange)',
                     };
                   } else if (!row.isCorrectRow && isSelected) {
-                    btnStyle = {
+                    circleStyle = {
                       background: 'var(--ios-red-soft)',
                       color: 'var(--ios-red)',
                       border: '2px solid var(--ios-red)',
                     };
                   } else {
-                    btnStyle = {
+                    circleStyle = {
                       background: 'var(--ios-bg-secondary)',
                       color: 'var(--ios-label-sec)',
                       border: '1px solid var(--ios-separator)',
@@ -545,13 +527,13 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                     };
                   }
                 } else if (isSelected) {
-                  btnStyle = {
+                  circleStyle = {
                     background: 'var(--ios-blue)',
                     color: '#FFFFFF',
                     border: '2px solid var(--ios-blue)',
                     boxShadow: '0 4px 14px rgba(0, 122, 255, 0.35)',
                   };
-                  btnClass += ' scale-105';
+                  circleClass += ' scale-105';
                 }
 
                 return (
@@ -561,8 +543,8 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                     type="button"
                     disabled={fipiSubmitted}
                     onClick={() => toggleRow(digit)}
-                    className={btnClass}
-                    style={btnStyle}
+                    className={circleClass}
+                    style={circleStyle}
                     aria-label={`Цифра ${digit}${isSelected ? ' (выбрана)' : ''}`}
                   >
                     <span>{digit}</span>
@@ -580,7 +562,7 @@ export const QuestionCardView: React.FC<QuestionCardViewProps> = React.memo(({
                   return (
                     <div
                       key={digit}
-                      className="p-2.5 rounded-xl border border-[var(--ios-separator)] text-[12px]"
+                      className="p-2.5 rounded-2xl border border-[var(--ios-separator)] text-[12px]"
                       style={{ background: 'var(--ios-bg-secondary)' }}
                     >
                       <div className="flex items-center gap-2 font-bold mb-0.5">

@@ -874,7 +874,8 @@ export interface StructuredExplanation {
 
 export function parseStructuredExplanation(
   text: string,
-  fallbackWord?: string | null
+  fallbackWord?: string | null,
+  task?: TaskId
 ): StructuredExplanation {
   const cleaned = cleanDisplayText(text);
   if (!cleaned) return { ruleNote: '' };
@@ -941,46 +942,39 @@ export function parseStructuredExplanation(
   }
 
   const isGrammarTerm = (w: string) =>
-    /^(?:словарное|запомнить|исключение|сущ|существительное|прил|прилагательное|глаг|глагол|нареч|наречие|местоим|местоимение|прич|причастие|дееприч|деепричастие|предлог|союз|частица|числительное|междометие|категория|корень|суффикс|приставка|окончание|инфинитив|оканчивающееся|оканчивающийся|образованное|образованный|совершенного|несовершенного|переходный|непереходный|возвратный|страдательное|действительное|краткое|полное|вводное|производный|сочинительный|подчинительный)$/i.test(
+    /^(?:словарное|запомнить|исключение|сущ|существительное|прил|прилагательное|глаг|глагол|нареч|наречие|местоим|местоимение|прич|причастие|дееприч|деепричастие|предлог|союз|частица|числительное|междометие|категория|корень|суффикс|приставка|окончание|инфинитив|оканчивающееся|оканчивающийся|образованное|образованный|совершенного|несовершенного|переходный|непереходный|возвратный|страдательное|действительное|краткое|полное|вводное|производный|сочинительный|подчинительный|пояснительных|пояснительное|зависимое|зависимых)$/i.test(
       w.trim()
     );
 
-  // Extract checkWord (проверочное слово / инфинитив)
-  const cwMatch1 = ruleNote.match(
-    /(?:проверочное слово|проверка|проверяется словом|где гласная стоит под ударением)[:—\-–\s]+[«"']?([А-Яа-яЁё\u0300-\u036f]+)[»"']?/i
-  );
-  if (cwMatch1 && !isGrammarTerm(cwMatch1[1])) {
-    checkWord = cwMatch1[1];
-  } else {
-    const cwMatch2 = ruleNote.match(
-      /проверяемая\s+[А-Яа-яЁё]+\s*\(([А-Яа-яЁё\u0300-\u036f]+)\)/i
+  // Extract checkWord (проверочное слово / инфинитив) — strictly for Tasks 9 and 12 ONLY
+  const isCheckWordEligible = task === '9' || task === '12';
+  if (isCheckWordEligible) {
+    const cwMatch1 = ruleNote.match(
+      /(?:проверочное слово|проверка|проверяется словом|где гласная стоит под ударением)[:—\-–\s]+[«"']?([А-Яа-яЁё\u0300-\u036f]+)[»"']?/i
     );
-    if (cwMatch2 && !isGrammarTerm(cwMatch2[1])) {
-      checkWord = cwMatch2[1];
-      ruleNote = ruleNote.replace(`(${checkWord})`, '').trim();
+    if (cwMatch1 && !isGrammarTerm(cwMatch1[1])) {
+      checkWord = cwMatch1[1];
     } else {
-      const infMatch = ruleNote.match(
-        /(?:инфинитив|образовано от глагола)\s*[—–\-:]?\s*[«"']([А-Яа-яЁё\u0300-\u036f]+)[»"']/i
+      const cwMatch2 = ruleNote.match(
+        /проверяемая\s+[А-Яа-яЁё]+\s*\(([А-Яа-яЁё\u0300-\u036f]+)\)/i
       );
-      if (infMatch && !isGrammarTerm(infMatch[1])) {
-        checkWord = infMatch[1];
-      } else if (/^[А-Яа-яЁё\u0300-\u036f]+$/.test(ruleNote.trim())) {
-        const single = ruleNote.trim();
-        if (/^(?:словарное|запомнить)$/i.test(single)) {
-          ruleNote = 'Непроверяемая гласная в корне (словарное слово, написание нужно запомнить).';
-        } else if (!isGrammarTerm(single)) {
-          checkWord = single;
-          ruleNote = `Безударная гласная в корне проверяется ударением (проверочное слово — «${single}»).`;
-        }
+      if (cwMatch2 && !isGrammarTerm(cwMatch2[1])) {
+        checkWord = cwMatch2[1];
+        ruleNote = ruleNote.replace(`(${checkWord})`, '').trim();
       } else {
-        const parenMatch = ruleNote.match(/\(([А-Яа-яЁё\u0300-\u036f]+)\)/);
-        if (
-          parenMatch &&
-          !isGrammarTerm(parenMatch[1]) &&
-          parenMatch[1].length >= 3
-        ) {
-          checkWord = parenMatch[1];
-          ruleNote = ruleNote.replace(`(${checkWord})`, '').trim();
+        const infMatch = ruleNote.match(
+          /(?:инфинитив|образовано от глагола)\s*[—–\-:]?\s*[«"']([А-Яа-яЁё\u0300-\u036f]+)[»"']/i
+        );
+        if (infMatch && !isGrammarTerm(infMatch[1])) {
+          checkWord = infMatch[1];
+        } else if (/^[А-Яа-яЁё\u0300-\u036f]+$/.test(ruleNote.trim())) {
+          const single = ruleNote.trim();
+          if (/^(?:словарное|запомнить)$/i.test(single)) {
+            ruleNote = 'Непроверяемая гласная в корне (словарное слово, написание нужно запомнить).';
+          } else if (!isGrammarTerm(single)) {
+            checkWord = single;
+            ruleNote = `Безударная гласная в корне проверяется ударением (проверочное слово — «${single}»).`;
+          }
         }
       }
     }
@@ -994,21 +988,86 @@ export function parseStructuredExplanation(
 
   // Identify orthogramType badge if not yet set
   if (!orthogramType) {
-    const chgMatch = ruleNote.match(/чередовани[ея]\s+(?:корней\s+|в корне\s+)?([А-Яа-яЁё\-\/()\s]+?)(?=[:;,.]|$)/i);
-    if (chgMatch) {
-      orthogramType = `Чередование ${chgMatch[1].trim()}`;
-    } else if (/непроверяемая|словарное/i.test(ruleNote)) {
-      orthogramType = 'Словарное слово (непроверяемая гласная)';
-    } else if (/проверяемая|проверочное слово/i.test(ruleNote) || checkWord) {
-      orthogramType = 'Проверяемая гласная в корне';
-    } else if (/приставк/i.test(ruleNote)) {
-      orthogramType = 'Правописание приставки';
-    } else if (/спряжен/i.test(ruleNote)) {
-      orthogramType = 'Личное окончание / суффикс причастия';
-    } else if (/суффикс/i.test(ruleNote)) {
-      orthogramType = 'Правописание суффикса';
-    } else if (/слитно|раздельно|дефис/i.test(ruleNote)) {
-      orthogramType = 'Слитное, раздельное или дефисное написание';
+    if (task === '13') {
+      const targetLower = (targetWord || '').toLowerCase().replace(/ё/g, 'е');
+      const isParticiple =
+        /причаст/i.test(ruleNote) ||
+        /(?:ущ|ющ|ащ|ящ|вш|ш|ем|им|ом|енн|ённ|анн|янн|т)(?:ый|ая|ое|ые|ого|ому|ым|им|ом|ем|ую|юю|ой|ей|ых|их|ыми|ими)(?:ся|сь)?$/i.test(targetLower);
+      const isAdjective =
+        /прилагательн/i.test(ruleNote) ||
+        /(?:[нлвскгхмтпбдзжрчшщц]ая|[нлвскгхмтпбдзжрчшщц]яя|ое|ее|ый|ий|ой|ые|ие|ого|его|ому|ему|ым|им|ом|ем|ую|юю|ей|ых|их|ыми|ими)$/i.test(targetLower);
+
+      if (isParticiple) {
+        orthogramType = /зависим|противопоставл|раздельно/i.test(ruleNote)
+          ? 'Полные причастия с зависимыми словами (раздельно)'
+          : /кратк/i.test(ruleNote)
+          ? 'Краткие причастия с НЕ (всегда раздельно)'
+          : 'Одиночные причастия с НЕ (слитно)';
+      } else if (isAdjective) {
+        orthogramType = 'Правописание НЕ с прилагательными';
+      } else if (/деепричаст/i.test(ruleNote) || /(?:[аеёиоуыэюя]я|[жшчщ]а|[аяу]чи|вши?|вшись)(?:ся|сь)?$/i.test(targetLower)) {
+        orthogramType = 'Правописание НЕ с деепричастиями';
+      } else if (/существительн/i.test(ruleNote)) {
+        orthogramType = 'Правописание НЕ с существительными';
+      } else if (/глагол/i.test(ruleNote)) {
+        orthogramType = 'Правописание НЕ и НИ с глаголами';
+      } else if (/наречи/i.test(ruleNote)) {
+        orthogramType = 'Правописание НЕ и НИ с наречиями';
+      } else if (/местоимен/i.test(ruleNote)) {
+        orthogramType = 'Правописание НЕ и НИ с местоимениями';
+      } else if (/категори|состояни|рад|готов|должен/i.test(ruleNote)) {
+        orthogramType = 'Слова категории состояния с НЕ';
+      } else {
+        orthogramType = 'Слитное и раздельное написание НЕ и НИ';
+      }
+    } else if (task === '14') {
+      const lowerWord = (targetWord || '').toLowerCase().replace(/ё/g, 'е');
+      if (
+        /сложн.*прилаг/i.test(ruleNote) ||
+        /^(?:сорока|двадцати|тридцати|пяти|шести|семи|восьми|девяти|десяти|двух|трех|четырех|сто|тысяче)(?:минутн|летн|дневн|этажн|рублев|процентн|метров|километров|часов|кратн)/i.test(lowerWord) ||
+        /^(?:сельскохозяйственн|древнерусск|железнодорожн|машиностроительн)/i.test(lowerWord)
+      ) {
+        orthogramType = 'Сложные прилагательные';
+      } else if (/союз/i.test(ruleNote) || /^(?:чтобы|также|тоже|зато|притом|причем)$/i.test(lowerWord)) {
+        orthogramType = 'Сочинительные и подчинительные союзы';
+      } else if (/предлог/i.test(ruleNote) || /^(?:ввиду|вследствие|наподобие|вместо|навстречу|насчет)$/i.test(lowerWord)) {
+        orthogramType = 'Производные предлоги';
+      } else if (/пол-|полу-|юли/i.test(ruleNote) || lowerWord.startsWith('пол') || lowerWord.startsWith('полу')) {
+        orthogramType = 'Корень ПОЛ- и приставка ПОЛУ-';
+      } else if (/наречи/i.test(ruleNote) || /по-/i.test(ruleNote) || lowerWord.startsWith('по-') || lowerWord.startsWith('во-')) {
+        orthogramType = 'Слитное, дефисное и раздельное написание наречий';
+      } else if (/сочетан|в конце концов|в то же время/i.test(ruleNote) || lowerWord.includes('в конце концов')) {
+        orthogramType = 'Устойчивые сочетания (раздельно)';
+      } else {
+        orthogramType = 'Слитное, дефисное или раздельное написание';
+      }
+    } else if (task === '15') {
+      if (/кратк/i.test(ruleNote)) {
+        orthogramType = 'Краткие формы (Н и НН)';
+      } else if (/причаст|отглагольн/i.test(ruleNote)) {
+        orthogramType = 'Н и НН в причастиях и отглагольных прилагательных';
+      } else if (/исключен/i.test(ruleNote)) {
+        orthogramType = 'Исключения Н и НН';
+      } else {
+        orthogramType = 'Правописание Н и НН в суффиксах';
+      }
+    } else {
+      const chgMatch = ruleNote.match(/чередовани[ея]\s+(?:корней\s+|в корне\s+)?([А-Яа-яЁё\-\/()\s]+?)(?=[:;,.]|$)/i);
+      if (chgMatch) {
+        orthogramType = `Чередование ${chgMatch[1].trim()}`;
+      } else if (/непроверяемая|словарное/i.test(ruleNote)) {
+        orthogramType = 'Словарное слово (непроверяемая гласная)';
+      } else if (/проверяемая|проверочное слово/i.test(ruleNote) || (task === '9' && checkWord)) {
+        orthogramType = 'Проверяемая гласная в корне';
+      } else if (/приставк/i.test(ruleNote)) {
+        orthogramType = 'Правописание приставки';
+      } else if (/спряжен/i.test(ruleNote)) {
+        orthogramType = 'Личное окончание / суффикс причастия';
+      } else if (/суффикс/i.test(ruleNote)) {
+        orthogramType = 'Правописание суффикса';
+      } else if (/слитно|раздельно|дефис/i.test(ruleNote)) {
+        orthogramType = 'Слитное, раздельное или дефисное написание';
+      }
     }
   }
 
@@ -1039,7 +1098,7 @@ export function parseStructuredExplanation(
   }
   if (stepBuf.trim()) rawSteps.push(stepBuf.trim());
 
-  const steps = rawSteps
+  let steps = rawSteps
     .map((st) => {
       let cleanSt = st.replace(/^[,;.\s—–-]+|[,;.\s]+$/g, '').trim();
       if (!cleanSt) return '';
@@ -1047,6 +1106,63 @@ export function parseStructuredExplanation(
       return cleanSt.charAt(0).toUpperCase() + cleanSt.slice(1);
     })
     .filter(Boolean);
+
+  // Filter out contradictory steps and sanitize conclusions
+  if (task === '13') {
+    const hasDependentWord = steps.some((s) =>
+      /зависим(?:ым|ого|ые|ых|ое)\s+слов|причасти[ея]\s+с\s+зависим|наличии\s+зависимых/i.test(s)
+    );
+    const hasOpposition = steps.some((s) =>
+      /противопоставлен(?:ие|ием|ия)\s+с\s+союзом\s+«?А»?|прямым\s+противопоставлением/i.test(s)
+    );
+
+    if (hasDependentWord) {
+      steps = steps.filter(
+        (s) =>
+          !/нет\s+зависимых|отсутстви[еи]\s+зависимых/i.test(s) &&
+          !/нет\s+противопоставления\s+с\s+союзом\s+«?А»?,\s*зависимых/i.test(s) &&
+          !/пишется\s+СЛИТНО/i.test(s)
+      );
+      if (!steps.some((s) => /пишется\s+РАЗДЕЛЬНО/i.test(s))) {
+        steps.push(`Поэтому пишется РАЗДЕЛЬНО${targetWord ? ` — «${targetWord}»` : ''}.`);
+      }
+    } else if (hasOpposition) {
+      steps = steps.filter(
+        (s) =>
+          !/нет\s+противопоставления/i.test(s) &&
+          !/пишется\s+СЛИТНО/i.test(s)
+      );
+      if (!steps.some((s) => /пишется\s+РАЗДЕЛЬНО/i.test(s))) {
+        steps.push(`Поэтому пишется РАЗДЕЛЬНО${targetWord ? ` — «${targetWord}»` : ''}.`);
+      }
+    }
+  } else if (task === '14') {
+    const nonHyphenWords = [
+      'ПОЭТОМУ', 'ПОТОМУ', 'ПОЧЕМУ', 'ПОСКОЛЬКУ', 'ОТТОГО', 'ОТЧЕГО',
+      'ЗАТО', 'ТАКЖЕ', 'ТОЖЕ', 'ЧТОБЫ', 'ВВИДУ', 'НАЗАВТРА', 'ВСЛЕДСТВИЕ',
+      'НАВСТРЕЧУ', 'НАПОДОБИЕ', 'ПОНЕМНОГУ'
+    ];
+    const upperTarget = (targetWord || '').replace(/[-()]/g, '').toUpperCase();
+    if (nonHyphenWords.includes(upperTarget)) {
+      steps = steps.filter(
+        (s) =>
+          !/такие\s+наречия\s+всегда\s+пишутся\s+через\s+дефис/i.test(s) &&
+          !/ЧЕРЕЗ\s+ДЕФИС/i.test(s)
+      );
+      if (!steps.some((s) => /пишется\s+СЛИТНО/i.test(s))) {
+        steps.push(`Поэтому пишется СЛИТНО — «${targetWord}».`);
+      }
+    }
+  }
+
+  // Deduplicate identical steps
+  const seenSteps = new Set<string>();
+  steps = steps.filter((s) => {
+    const key = s.trim().toLowerCase();
+    if (seenSteps.has(key)) return false;
+    seenSteps.add(key);
+    return true;
+  });
 
   ruleNote = steps.join(' ');
 
@@ -1108,8 +1224,8 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
     ? cleanDisplayText(explanation)
     : cleanDisplayText(isolateTargetWordExplanation(explanation, wordTitle));
   const parsedCardExpl = useMemo(
-    () => (isFipi5Row ? null : parseStructuredExplanation(cleanExpl, wordTitle)),
-    [isFipi5Row, cleanExpl, wordTitle]
+    () => (isFipi5Row ? null : parseStructuredExplanation(cleanExpl, wordTitle, task)),
+    [isFipi5Row, cleanExpl, wordTitle, task]
   );
   const isolatedRule = isFipi5Row
     ? cleanDisplayText(rule || '')
@@ -1146,9 +1262,9 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
       className="ios-inset-group ios-scroll-item p-3.5 !mb-0 ios-stagger-card cursor-pointer active:scale-[0.985] hover:border-[var(--ios-blue)]/50 hover:shadow-sm select-none transition-[border-color,box-shadow,background-color] duration-200"
       style={{ animationDelay: `${Math.min(staggerIndex * 35, 180)}ms` }}
     >
-      {/* Top Row: Task Badge + Topic + Collapse Toggle + Structured "Правило ?" Trigger */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-start gap-1.5 min-w-0 flex-1">
+      {/* Top Row: Task Badge + Topic + Collapse Toggle + Structured "Правило ?" Trigger (Responsive flex-wrap, 0 overlap) */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-2">
+        <div className="flex items-start gap-1.5 min-w-0 flex-1 basis-[160px]">
           <span
             className="w-5 h-5 rounded-md text-[11px] font-extrabold flex items-center justify-center text-white shrink-0 mt-0.5"
             style={{ background: TASK_META[task].gradient }}
@@ -1156,13 +1272,13 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
             {task}
           </span>
           <span
-            className="text-[11.5px] font-extrabold leading-snug break-words"
+            className="text-[12px] font-extrabold leading-snug break-words [overflow-wrap:anywhere] min-w-0 flex-1"
             style={{ color: 'var(--ios-blue)' }}
           >
             {topic}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
           <button
             type="button"
             onClick={(e) => {
@@ -1206,7 +1322,7 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-1.5">
         <div className="min-w-0 flex-1 basis-[160px]">
           <div className="text-[15px] font-extrabold leading-snug break-words">
-            {isFipi5Row ? `Задание № ${task} (5 строк)` : wordTitle}
+            {isFipi5Row ? `Задание № ${task} · ФИПИ` : wordTitle}
           </div>
           {context && !isFipi5Row && (
             <div
@@ -1316,7 +1432,7 @@ export const StructuredErrorCard: React.FC<StructuredErrorCardProps> = React.mem
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
-                  {parsedCardExpl?.checkWord && (
+                  {parsedCardExpl?.checkWord && (task === '9' || task === '12') && (
                     <div
                       className="px-2.5 py-1.5 rounded-xl text-[11.5px] font-extrabold flex items-center gap-1.5"
                       style={{
@@ -1453,8 +1569,8 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
     )
   );
   const parsedExplanation = useMemo(() => {
-    return parseStructuredExplanation(rawExplanation, solvedWordPreview);
-  }, [rawExplanation, solvedWordPreview]);
+    return parseStructuredExplanation(rawExplanation, solvedWordPreview, task);
+  }, [rawExplanation, solvedWordPreview, task]);
 
   const contextText =
     activeError?.context ||
@@ -1492,7 +1608,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
       const wordBreakdowns = r.solvedWords.map((solvedW, wIdx) => {
         const rawGapW = r.words[wIdx] || '';
         const isolated = isolateTargetWordExplanation(r.explanation || '', solvedW);
-        const parsed = parseStructuredExplanation(isolated, solvedW);
+        const parsed = parseStructuredExplanation(isolated, solvedW, task);
 
         // Fallback to wordClassifier if the row explanation in the bank was just a bare list of words
         let fallbackRule = '';
@@ -1651,7 +1767,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
             className="text-[20px] sm:text-[23px] font-black leading-tight tracking-tight mb-1 break-words"
             style={{ color: 'var(--ios-label)' }}
           >
-            {solvedWordPreview || `Задание № ${task} (5 строк)`}
+            {solvedWordPreview || `Задание № ${task} · ФИПИ`}
           </div>
 
           {contextText && (
@@ -1690,7 +1806,7 @@ export const RuleInspectorModal: React.FC<RuleInspectorModalProps> = React.memo(
                 )}
               </div>
 
-              {parsedExplanation.checkWord && (
+              {parsedExplanation.checkWord && (task === '9' || task === '12') && (
                 <div className="flex items-center gap-2">
                   <div
                     className="px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold flex items-center gap-1.5"

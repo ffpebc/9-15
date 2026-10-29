@@ -2344,7 +2344,7 @@ export function cleanWord(str: string | undefined): string {
 
 export function cleanExplanation(str: string | undefined): string {
   if (!str) return '';
-  return str
+  let res = str
     .replace(/\([Зз]\)/g, '(3)')
     .replace(/«\.\.\.—\s*«\.\.\./g, '')
     .replace(/—\s*«\.\.\.[^»]*»*/g, '')
@@ -2352,7 +2352,31 @@ export function cleanExplanation(str: string | undefined): string {
     .replace(/«\.\.\./g, '')
     .replace(/\.\.\.»/g, '')
     .replace(/[\u200b\u200c\u200d\u200e\u200f\ufeff\xad]/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .trim();
+
+  // Normalize digit 3 inside Russian words
+  res = res.replace(/([А-Яа-яЁё])3([А-Яа-яЁё])/g, '$1З$2');
+  res = res.replace(/\b3([А-Яа-яЁё]{2,})/g, 'З$1');
+
+  // Purge bogus Task 14 hyphen rules on conjunctions/adverbs
+  const nonHyphen = ['ПОЭТОМУ', 'ПОТОМУ', 'ПОЧЕМУ', 'ПОСКОЛЬКУ', 'ОТТОГО', 'ОТЧЕГО', 'ЗАТО', 'ТАКЖЕ', 'ТОЖЕ', 'ЧТОБЫ', 'ВВИДУ', 'НАЗАВТРА', 'ВСЛЕДСТВИЕ', 'НАВСТРЕЧУ', 'НАПОДОБИЕ', 'ПОНЕМНОГУ'];
+  for (const nh of nonHyphen) {
+    const r1 = new RegExp(`${nh}\\s*—[^\\n.]*?такие наречия всегда пишутся через дефис[^\\n.]*?поэтому пишется ЧЕРЕЗ ДЕФИС\\s*—\\s*«[^»]+»[.]?`, 'gi');
+    res = res.replace(r1, `${nh} — союз или наречие; пишется слитно; поэтому пишется СЛИТНО — «${nh}».`);
+    const r2 = new RegExp(`такие наречия всегда пишутся через дефис[^\\n.]*?поэтому пишется ЧЕРЕЗ ДЕФИС\\s*—\\s*«${nh}»[.]?`, 'gi');
+    res = res.replace(r2, `пишется СЛИТНО — «${nh}».`);
+  }
+
+  // Remove bulk dump text
+  res = res.replace(/;\s*Остальные слова пишутся[^.;]*/gi, '');
+  res = res.replace(/;\s*В остальных вариантах[^.;]*/gi, '');
+
+  return res.replace(/;\s*;/g, ';').replace(/\.\s*\./g, '.').trim();
 }
 
 export function cleanQuestionRule(rule: string | undefined, task: string): string {
@@ -2365,7 +2389,7 @@ export function cleanQuestionRule(rule: string | undefined, task: string): strin
         return 'Укажите цифру(-ы), на месте которой(-ых) пишется НН.';
       }
     }
-    return 'Укажите цифру(-ы), на месте которой(-ых) пишется НН (или Н).';
+    return 'Укажите цифру(-ы), на месте которой(-ых) пишется НН.';
   }
   if (!rule) {
     if (task === '13') return 'Укажите варианты ответов, в которых НЕ с выделенным словом пишется РАЗДЕЛЬНО (или СЛИТНО).';
@@ -3105,8 +3129,8 @@ export function applyAnswerToState(
             id: `err-${question.id}`,
             task: question.task,
             topic: question.topic,
-            wordDisplay: `Задание № ${question.task} · 5 строк ФИПИ`,
-            correctWord: `Задание № ${question.task} (5 строк)`,
+            wordDisplay: `Задание № ${question.task} · ФИПИ`,
+            correctWord: `Задание № ${question.task} (ФИПИ)`,
             userChoice: userChoiceLabel,
             correctChoice: question.correctIndices.join(''),
             context: `Подходят строки: ${question.correctIndices.join(', ')}`,
@@ -3274,8 +3298,8 @@ export function decodeBackupCode(
             id: `err-${q.id}`,
             task: q.task,
             topic: q.topic,
-            wordDisplay: `Задание № ${q.task} · 5 строк ФИПИ`,
-            correctWord: `Задание № ${q.task} (5 строк)`,
+            wordDisplay: `Задание № ${q.task} · ФИПИ`,
+            correctWord: `Задание № ${q.task} (ФИПИ)`,
             userChoice: String(userChoice || '?'),
             correctChoice: q.correctIndices.join(''),
             context: `Подходят строки: ${q.correctIndices.join(', ')}`,

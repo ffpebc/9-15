@@ -19,6 +19,7 @@ import {
   cleanQuestionRule,
   resolveTask15Sentence,
 } from './trainerLogic.ts';
+import { parseStructuredExplanation } from '../components/WorkWindows.tsx';
 
 test('FIPI bank generates sprint questions + FIPI sets + KIM variants + flashcards & homophones', () => {
   const bank = getTrainerBank();
@@ -377,7 +378,224 @@ test('FIPI Task 14 explanations have zero contradictory hyphenated rules and ded
     }
   }
 });
+test('Task 13 and Task 14 linguistic and classification fixes (Photos 1, 2, 3)', () => {
+  const bank = getTrainerBank();
 
+  // Photo 1: В КОНЦЕ КОНЦОВ is always separate (РАЗДЕЛЬНО)
+  const fipi130924 = bank.fipiQuestions.find((q) => q.id === 'fipi-14-shkolkovo-14-130924');
+  assert.ok(fipi130924);
+  assert.equal(fipi130924.rows[0].letter, 'ДЕФИСНО / РАЗДЕЛЬНО');
+  assert.equal(fipi130924.rows[0].isCorrectRow, false);
+  assert.ok(fipi130924.rows[0].solvedWords[0].includes('В КОНЦЕ КОНЦОВ'));
+  assert.ok(fipi130924.rows[0].explanation.includes('В КОНЦЕ КОНЦОВ'));
 
+  for (const s of bank.sprintQuestions) {
+    const full = `${s.prefix || ''}${s.suffix || ''}`.replace(/[()]/g, '').trim().toUpperCase();
+    if (full.includes('КОНЦЕКОНЦОВ') || full === 'В КОНЦЕ КОНЦОВ') {
+      assert.equal(s.answer, 'РАЗДЕЛЬНО', `Sprint ${s.id} with В КОНЦЕ КОНЦОВ must have answer РАЗДЕЛЬНО`);
+    }
+  }
+
+  // Photo 2: СОРОКАМИНУТНЫЙ is a compound numeral adjective, not a preposition
+  const spSorok = bank.sprintQuestions.find((s) => s.id === 'sp-14-neofamily-14-50547-r3-w1');
+  if (spSorok) {
+    assert.equal(spSorok.topic, 'Сложные прилагательные (слитно)');
+    assert.ok(spSorok.explanation.includes('сложное прилагательное'));
+    assert.equal(spSorok.explanation.includes('наречие, производный предлог или союз'), false);
+  }
+
+  // Photo 3: НЕ ВЫХОДЯЩИМИ has dependent phrase «за пределы простейших ощущений» -> РАЗДЕЛЬНО with zero contradictions
+  const fipi54722 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-54722');
+  assert.ok(fipi54722);
+  const r3 = fipi54722.rows[2];
+  assert.equal(r3.letter, 'РАЗДЕЛЬНО');
+  assert.equal(r3.isCorrectRow, false);
+  assert.ok(r3.solvedWords[0].includes('НЕ ВЫХОДЯЩИМИ'));
+  assert.ok(r3.explanation.includes('зависимым'));
+  assert.equal(r3.explanation.includes('нет зависимых'), false);
+
+  const sp54722 = bank.sprintQuestions.find((s) => s.id === 'sp-13-neofamily-13-54722-r3-w1');
+  if (sp54722) {
+    assert.equal(sp54722.answer, 'РАЗДЕЛЬНО');
+    assert.equal(sp54722.topic, 'Полные причастия с зависимыми словами (раздельно)');
+    assert.equal(sp54722.explanation.includes('нет зависимых'), false);
+  }
+
+  // Verification: zero occurrences of placeholder in Task 14 FIPI and sprint
+  for (const q of bank.fipiQuestions) {
+    if (q.task === '14') {
+      for (const r of q.rows) {
+        assert.equal(
+          r.explanation.includes('наречие, производный предлог или союз'),
+          false,
+          `FIPI ${q.id} still has placeholder in explanation: ${r.explanation}`
+        );
+      }
+    }
+  }
+
+  // Verification: zero contradictions between dependent word/contrast and СЛИТНО in Task 13
+  for (const q of bank.fipiQuestions) {
+    if (q.task === '13') {
+      for (let i = 0; i < q.rows.length; i++) {
+        const r = q.rows[i];
+        if (r.letter === 'СЛИТНО') {
+          assert.equal(
+            r.explanation.includes('есть зависимое слово') || r.explanation.includes('есть зависимые слова'),
+            false,
+            `Task 13 contradiction in ${q.id} row ${i + 1}: marked СЛИТНО but mentions dependent word`
+          );
+          assert.equal(
+            r.explanation.includes('есть противопоставление'),
+            false,
+            `Task 13 contradiction in ${q.id} row ${i + 1}: marked СЛИТНО but mentions противопоставление`
+          );
+        }
+      }
+    }
+  }
+});
+
+test('Task 13 multi-answer integrity, correctIndices alignment, and zero illegal СЛИТНО spellings', () => {
+  const bank = getTrainerBank();
+
+  // 1. Verify specific healed Task 13 questions
+  const q54722 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-54722');
+  assert.ok(q54722);
+  assert.deepEqual(q54722.correctIndices, [2, 4, 5]);
+
+  const q66995 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-66995');
+  assert.ok(q66995);
+  assert.deepEqual(q66995.correctIndices, [2, 3]);
+
+  const q42727 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-umschool-13-42727');
+  assert.ok(q42727);
+  assert.deepEqual(q42727.correctIndices, [1, 2, 5]);
+
+  const q18613 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-18613');
+  assert.ok(q18613);
+  assert.deepEqual(q18613.correctIndices, [1, 2, 4]);
+
+  // 2. All Task 13 questions must have correctIndices that match their rows where isCorrectRow === true
+  for (const q of bank.fipiQuestions) {
+    if (q.task === '13') {
+      const derivedIndices = q.rows
+        .map((r, i) => (r.isCorrectRow ? i + 1 : null))
+        .filter((x): x is number => x !== null);
+      assert.deepEqual(
+        q.correctIndices,
+        derivedIndices,
+        `Task 13 question ${q.id} correctIndices [${q.correctIndices}] does not match rows isCorrectRow [${derivedIndices}]`
+      );
+      assert.ok(
+        q.correctIndices.length >= 2 && q.correctIndices.length <= 4,
+        `Task 13 question ${q.id} has invalid number of correct answers (${q.correctIndices.length}) for standard 2-4 KIM answer format`
+      );
+    }
+  }
+
+  // 3. Zero instances of illegal СЛИТНО with verbs, short participles, comparatives in sprint questions
+  const illegalSplitPatterns = [
+    /^НЕ\s+(?:БЫЛ|СОБИРАЛСЯ|МОГ|ЗНАЛ|ВИДЕЛ|ПРИЗНАТЬСЯ)$/i,
+    /^НЕ\s+(?:СВАРЕН|ПРОЧИТАН|ВЗЯТА|ЗАКРЫТА|ЗАКРУЧЕНА|РАЗЛИТ|ВЫПОЛНЕНЫ|НАСТРОЕНА)$/i,
+    /^НЕ\s+(?:ВЫШЕ|МЕНЬШЕ|ГРОМЧЕ|ЯРЧЕ|БОЛЬШЕ)$/i,
+    /^НЕ\s+ПО-[А-ЯЁ]+/i,
+    /^НЕ\s+(?:КАЖДЫЙ|ВСЕ|ТОЙ)$/i,
+    /^НЕ\s+РАЗ$/i,
+  ];
+
+  for (const s of bank.sprintQuestions) {
+    if (s.task === '13') {
+      const fullWord = `${s.prefix || ''}${s.suffix || ''}`.replace(/[()]/g, '').trim().toUpperCase();
+      for (const pat of illegalSplitPatterns) {
+        if (pat.test(fullWord)) {
+          assert.equal(
+            s.answer,
+            'РАЗДЕЛЬНО',
+            `Sprint question ${s.id} for "${fullWord}" must have answer РАЗДЕЛЬНО, but got ${s.answer}`
+          );
+        }
+      }
+    }
+  }
+});
+
+test('Photos 1, 2, 3, 4, 5 regression tests & structured explanation sanitization', () => {
+  const bank = getTrainerBank();
+
+  // Photo 1: (НЕ)РАССЛЫШАННЫЙ преподавателем -> РАЗДЕЛЬНО with zero self-contradiction
+  const fipi49277 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-49277');
+  assert.ok(fipi49277);
+  const p1Row = fipi49277.rows.find((r) => r.words[0].includes('РАССЛЫШАННЫЙ'));
+  assert.ok(p1Row);
+  assert.equal(p1Row.letter, 'РАЗДЕЛЬНО');
+  assert.equal(p1Row.explanation.includes('нет зависимых'), false);
+  assert.equal(p1Row.explanation.includes('пишется СЛИТНО'), false);
+  assert.ok(p1Row.explanation.includes('зависимым'));
+
+  // Photo 2: (НЕ)ДОЖДАВШИЕСЯ ужина -> РАЗДЕЛЬНО
+  const fipi37254 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-37254');
+  assert.ok(fipi37254);
+  const p2Row = fipi37254.rows.find((r) => r.words[0].includes('ДОЖДАВШИЕСЯ'));
+  assert.ok(p2Row);
+  assert.equal(p2Row.letter, 'РАЗДЕЛЬНО');
+  assert.equal(p2Row.explanation.includes('нет зависимых'), false);
+  assert.equal(p2Row.explanation.includes('пишется СЛИТНО'), false);
+
+  // Photo 3: (НА)ЗАВТРА ... (ПО)ЭТОМУ -> СЛИТНО, zero hyphen claims
+  const fipi29683 = bank.fipiQuestions.find((q) => q.id === 'fipi-14-neofamily-14-29683');
+  assert.ok(fipi29683);
+  const p3Row = fipi29683.rows.find((r) => r.words[0].includes('НАЗАВТРА') || r.words[0].includes('(НА)ЗАВТРА'));
+  assert.ok(p3Row);
+  assert.equal(p3Row.letter, 'СЛИТНО');
+  assert.equal(p3Row.explanation.includes('через дефис'), false);
+  assert.equal(p3Row.explanation.includes('ДЕФИС'), false);
+
+  // Photo 4: ИНЖЕНЕРОМ(ТЕХНОЛОГОМ) -> ДЕФИСНО
+  const spCompound = bank.sprintQuestions.find((s) => s.id === 'sp-14-neofamily-14-50045-r3-w1');
+  assert.ok(spCompound);
+  assert.equal(spCompound.answer, 'ДЕФИСНО');
+  assert.equal(spCompound.prefix, '(ИНЖЕНЕРОМ)');
+  assert.equal(spCompound.suffix, 'ТЕХНОЛОГОМ');
+  assert.ok(spCompound.options.includes('ДЕФИСНО'));
+
+  // Photo 5: (НЕ)ХРУСТАЛЬНАЯ -> РАЗДЕЛЬНО, topic & category "Правописание НЕ с прилагательными"
+  const fipi47871 = bank.fipiQuestions.find((q) => q.id === 'fipi-13-neofamily-13-47871');
+  assert.ok(fipi47871);
+  const p5Row = fipi47871.rows.find((r) => r.words[0].includes('ХРУСТАЛЬНАЯ'));
+  assert.ok(p5Row);
+  assert.equal(p5Row.letter, 'РАЗДЕЛЬНО');
+  assert.ok(p5Row.explanation.includes('противопоставлением'));
+
+  const sp47871 = bank.sprintQuestions.find((s) => s.id === 'sp-13-neofamily-13-47871-r3-w1');
+  assert.ok(sp47871);
+  assert.equal(sp47871.answer, 'РАЗДЕЛЬНО');
+  assert.equal(sp47871.topic, 'Правописание НЕ с прилагательными');
+
+  // Verify parseStructuredExplanation in WorkWindows: feminine adjective must NOT be gerund
+  const parsedAdj = parseStructuredExplanation('НЕ ХРУСТАЛЬНАЯ — относительное прилагательное', 'нехрустальная', '13');
+  assert.equal(parsedAdj.orthogramType, 'Правописание НЕ с прилагательными');
+
+  // Verify step contradiction sanitization in parseStructuredExplanation
+  const parsedContradiction = parseStructuredExplanation(
+    'НЕ РАССЛЫШАННЫЙ — полное причастие с зависимым словом; нет зависимых слов; поэтому пишется СЛИТНО — «НЕ РАССЛЫШАННЫЙ».',
+    'НЕ РАССЛЫШАННЫЙ',
+    '13'
+  );
+  assert.ok(parsedContradiction.steps);
+  assert.equal(parsedContradiction.steps.some((s) => s.includes('нет зависимых')), false);
+  assert.equal(parsedContradiction.steps.some((s) => s.includes('СЛИТНО')), false);
+  assert.ok(parsedContradiction.steps.some((s) => s.includes('РАЗДЕЛЬНО')));
+
+  // Verify Task 14 hyphen sanitization in parseStructuredExplanation
+  const parsedT14 = parseStructuredExplanation(
+    'ПОЭТОМУ — такие наречия всегда пишутся через дефис; поэтому пишется ЧЕРЕЗ ДЕФИС — «ПОЭТОМУ».',
+    'ПОЭТОМУ',
+    '14'
+  );
+  assert.ok(parsedT14.steps);
+  assert.equal(parsedT14.steps.some((s) => s.includes('дефис')), false);
+  assert.ok(parsedT14.steps.some((s) => s.includes('СЛИТНО')));
+});
 
 
