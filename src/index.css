@@ -220,8 +220,17 @@ body::before {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
-  padding-bottom: calc(max(6px, calc(env(safe-area-inset-bottom, 0px) - 18px)) + 68px);
+  padding-bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 92px);
   transform: translateZ(0);
+}
+
+/* Dedicated Physical Bottom Clearance Spacer (prevents WebKit flex padding collapse) */
+.ios-bottom-clearance {
+  width: 100%;
+  height: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 78px);
+  min-height: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 78px);
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 /* Screen Stack tuned for iPhone 16 (393 x 852 pt) — Controlled by Framer Motion Spring Slide */

@@ -245,6 +245,14 @@ export default function App() {
   }
   const statDirection = statDirectionRef.current;
 
+  // Auto-scroll viewport back to top on tab or workout subview transitions
+  useEffect(() => {
+    const sc = document.getElementById('app-scroll-container');
+    if (sc) {
+      sc.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [activeTab, workoutView]);
+
   // Liquid Glass Windows (Modals) state
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const [rulesInitialSection, setRulesInitialSection] = useState<'all' | TaskId>('all');
@@ -982,7 +990,7 @@ export default function App() {
 
       {/* Main Viewport Scroll Container */}
       <div id="app-scroll-container" className="ios-viewport-scroll">
-        <main className="max-w-[600px] mx-auto px-3.5 pt-0.5 relative overflow-x-clip min-h-full flex-1 flex flex-col w-full">
+        <main className="max-w-[600px] mx-auto px-3.5 pt-0.5 relative overflow-x-clip min-h-full flex flex-col w-full flex-grow flex-shrink-0">
           <AnimatePresence initial={false} custom={tabDirection} mode="popLayout">
             {/* ======================================================================
                 TAB 1: WORKOUT BUILDER, ACTIVE WORKOUT & POST-SESSION SUMMARY
@@ -1206,6 +1214,7 @@ export default function App() {
                       </span>
                     </button>
                   </div>
+                  <div className="ios-bottom-clearance" aria-hidden="true" />
                 </motion.div>
               )}
 
@@ -1320,6 +1329,7 @@ export default function App() {
                 <motion.div
                   key="workout-summary"
                   id="workout-summary-view"
+                  className="ios-screen-stack w-full"
                   custom={workoutDirection}
                   variants={iosScreenSlideVariants}
                   initial="enter"
@@ -1576,6 +1586,7 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+                  <div className="ios-bottom-clearance" aria-hidden="true" />
                 </motion.div>
               )}
                 </AnimatePresence>
@@ -1729,6 +1740,7 @@ export default function App() {
                     />
                   </div>
                 )}
+                <div className="ios-bottom-clearance" aria-hidden="true" />
               </div>
               </motion.section>
             )}
@@ -2484,6 +2496,7 @@ export default function App() {
                   </motion.div>
                 )}
                   </AnimatePresence>
+                  <div className="ios-bottom-clearance" aria-hidden="true" />
                 </div>
               </motion.section>
             )}
@@ -2644,6 +2657,7 @@ export default function App() {
                     </span>
                   </button>
                 </div>
+                <div className="ios-bottom-clearance" aria-hidden="true" />
               </div>
               </motion.section>
             )}
@@ -3020,10 +3034,12 @@ export default function App() {
                   )}
                     </AnimatePresence>
                   </div>
+                  <div className="ios-bottom-clearance" aria-hidden="true" />
                 </div>
               </motion.section>
             )}
           </AnimatePresence>
+          <div className="ios-bottom-clearance" aria-hidden="true" />
         </main>
       </div>
 
