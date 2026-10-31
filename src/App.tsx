@@ -497,7 +497,10 @@ export default function App() {
   };
 
   const handleStartPlannedWorkout = () => {
-    const queue = buildWorkoutQueue(state.quantities, state.workoutMode);
+    const queue = buildWorkoutQueue(state.quantities, state.workoutMode, {
+      randomize: true,
+      shuffleTasks: state.isShuffled,
+    });
     startSessionWithQueue(queue);
   };
 
@@ -512,7 +515,10 @@ export default function App() {
       '15': 0,
       [taskId]: 20,
     };
-    const queue = buildWorkoutQueue(customQty, state.workoutMode);
+    const queue = buildWorkoutQueue(customQty, state.workoutMode, {
+      randomize: true,
+      shuffleTasks: false,
+    });
     startSessionWithQueue(queue);
   };
 
@@ -525,7 +531,7 @@ export default function App() {
     const queue = buildWorkoutQueue(
       { '9': 1, '10': 1, '11': 1, '12': 1, '13': 1, '14': 1, '15': 1 },
       'fipi',
-      { randomize: true }
+      { randomize: true, shuffleTasks: false }
     );
     startSessionWithQueue(queue);
   };
@@ -888,6 +894,21 @@ export default function App() {
           <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
           <polyline points="3 3 3 8 8 8" />
         </symbol>
+        <symbol
+          id="sf-shuffle"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="16 3 21 3 21 8" />
+          <line x1="4" y1="20" x2="21" y2="3" />
+          <polyline points="21 16 21 21 16 21" />
+          <line x1="15" y1="15" x2="21" y2="21" />
+          <line x1="4" y1="4" x2="9" y2="9" />
+        </symbol>
       </svg>
 
       {/* Top Floating Spatial Liquid Glass Capsule Navbar */}
@@ -1042,6 +1063,61 @@ export default function App() {
                           { key: 'mixed', label: 'Смешанный' },
                         ]}
                       />
+                    </div>
+
+                    {/* Shuffle Order Switch (Вразброс / По порядку) */}
+                    <div className="ios-inset-group !mb-3">
+                      <div
+                        id="shuffle-toggle-row"
+                        className="ios-cell cursor-pointer select-none"
+                        onClick={() =>
+                          setState((prev) => ({ ...prev, isShuffled: !prev.isShuffled }))
+                        }
+                        role="switch"
+                        aria-checked={state.isShuffled}
+                        aria-label="Вразброс: перемешать задания"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setState((prev) => ({ ...prev, isShuffled: !prev.isShuffled }));
+                          }
+                        }}
+                      >
+                        <div
+                          className="ios-row-icon shrink-0 transition-colors duration-200"
+                          style={{
+                            background: state.isShuffled
+                              ? 'linear-gradient(135deg, #0A84FF, #007AFF)'
+                              : 'var(--ios-fill-tertiary)',
+                            color: state.isShuffled ? '#FFFFFF' : 'var(--ios-label-sec)',
+                          }}
+                        >
+                          <svg className="w-4 h-4 shrink-0">
+                            <use href="#sf-shuffle" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0 pr-2">
+                          <div className="text-[13.5px] font-bold tracking-[-0.2px] leading-tight text-[var(--ios-label)]">
+                            Вразброс
+                          </div>
+                          <div
+                            className="text-[11px] leading-tight truncate mt-0.5"
+                            style={{ color: 'var(--ios-label-sec)' }}
+                          >
+                            {state.isShuffled
+                              ? 'Случайный порядок (разные задания чередуются)'
+                              : 'По порядку (сначала 9, затем 10, 11...)'}
+                          </div>
+                        </div>
+                        <div
+                          id="shuffle-switch-btn"
+                          className={`ios-switch shrink-0 ${state.isShuffled ? 'is-active' : ''}`}
+                          aria-hidden="true"
+                        >
+                          <div className="ios-switch-knob" />
+                        </div>
+                      </div>
                     </div>
 
                     {/* Tasks 9–15 Liquid Glass Group (Uncluttered, full titles) */}
@@ -3010,6 +3086,9 @@ export default function App() {
         onStartFipiTraps={handleStartFipiTrapsWorkout}
         onStartWeakestTaskWorkout={handleStartWeakestTaskWorkout}
         onStartRealKimWorkout={handleStartRealKimWorkout}
+        onToggleShuffle={() =>
+          setState((prev) => ({ ...prev, isShuffled: !prev.isShuffled }))
+        }
       />
 
       {/* Window 4: Instant Rule & Algorithm Inspector Sheet */}

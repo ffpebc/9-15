@@ -637,4 +637,65 @@ test('Full database integrity: zero contradictions, zero bogus hyphens, zero glu
   assert.equal(contradictions, 0);
 });
 
+test('buildWorkoutQueue respects shuffleTasks toggle: sequential when false, interleaved when true', () => {
+  const multiQuantities = {
+    '9': 15,
+    '10': 15,
+    '11': 15,
+    '12': 15,
+    '13': 15,
+    '14': 15,
+    '15': 15,
+  };
+
+  // 1. When shuffleTasks is false: tasks are strictly sequential in order 9, 10, 11, 12, 13, 14, 15
+  const seqQueue = buildWorkoutQueue(multiQuantities, 'sprint', {
+    randomize: true,
+    shuffleTasks: false,
+  });
+  assert.equal(seqQueue.length, 105);
+
+  const taskChunks: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const chunk = seqQueue.slice(i * 15, (i + 1) * 15);
+    const expectedTask = ['9', '10', '11', '12', '13', '14', '15'][i];
+    assert.equal(chunk.every((q) => q.task === expectedTask), true, `Chunk ${i} should all be Task ${expectedTask}`);
+    taskChunks.push(expectedTask);
+  }
+  assert.deepEqual(taskChunks, ['9', '10', '11', '12', '13', '14', '15']);
+
+  // 2. When shuffleTasks is true: tasks are interleaved (the first 15 questions contain diverse tasks)
+  const shuffledQueue = buildWorkoutQueue(multiQuantities, 'sprint', {
+    randomize: true,
+    shuffleTasks: true,
+  });
+  assert.equal(shuffledQueue.length, 105);
+
+  const first15Tasks = new Set(shuffledQueue.slice(0, 15).map((q) => q.task));
+  // In a random shuffle of 7 distinct tasks of 15 items each, the first 15 items contain at least 3 distinct tasks
+  assert.ok(first15Tasks.size >= 3, `Expected at least 3 distinct tasks in first 15 shuffled questions, got ${first15Tasks.size}`);
+
+  // Total count of each task remains exact
+  for (const tid of ['9', '10', '11', '12', '13', '14', '15'] as const) {
+    assert.equal(shuffledQueue.filter((q) => q.task === tid).length, 15);
+  }
+});
+
+test('TrainerState isShuffled flag encodes and restores accurately in backup code', () => {
+  let state = createInitialState();
+  assert.equal(state.isShuffled, true);
+
+  // Toggle off
+  state.isShuffled = false;
+  const codeOff = encodeBackupCode(state);
+  const restoredOff = decodeBackupCode(codeOff);
+  assert.equal(restoredOff?.isShuffled, false);
+
+  // Toggle on
+  state.isShuffled = true;
+  const codeOn = encodeBackupCode(state);
+  const restoredOn = decodeBackupCode(codeOn);
+  assert.equal(restoredOn?.isShuffled, true);
+});
+
 

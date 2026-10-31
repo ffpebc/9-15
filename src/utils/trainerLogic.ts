@@ -116,6 +116,7 @@ export interface SessionJournalEntry {
 export interface TrainerState {
   quantities: Record<TaskId, number>;
   workoutMode: WorkoutMode;
+  isShuffled: boolean;
   totalSolved: number;
   totalCorrect: number;
   sessionsCompleted: number;
@@ -2804,6 +2805,7 @@ export function createInitialState(): TrainerState {
   return {
     quantities: { '9': 5, '10': 5, '11': 5, '12': 5, '13': 5, '14': 5, '15': 5 },
     workoutMode: 'sprint',
+    isShuffled: true,
     totalSolved: 0,
     totalCorrect: 0,
     sessionsCompleted: 0,
@@ -3216,6 +3218,7 @@ export function encodeBackupCode(state: TrainerState): string {
     v: 27,
     q: TASK_IDS.map((id) => state.quantities[id] || 0),
     m: state.workoutMode,
+    sh: state.isShuffled ? 1 : 0,
     ts: state.totalSolved,
     tc: state.totalCorrect,
     sc: state.sessionsCompleted,
@@ -3371,6 +3374,7 @@ export function decodeBackupCode(
       ...fallbackState,
       quantities,
       workoutMode: data.m === 'fipi' || data.m === 'mixed' ? data.m : 'sprint',
+      isShuffled: data.sh === undefined ? true : Boolean(data.sh),
       totalSolved: Math.max(0, Number(data.ts || 0)),
       totalCorrect: Math.max(0, Number(data.tc || 0)),
       sessionsCompleted: Math.max(0, Number(data.sc || 0)),

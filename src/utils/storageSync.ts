@@ -18,6 +18,7 @@ export function sanitizeLoadedState(state: TrainerState): TrainerState {
   if (!state || !Array.isArray(state.errorBank)) return state;
   return {
     ...state,
+    isShuffled: typeof state.isShuffled === 'boolean' ? state.isShuffled : true,
     errorBank: state.errorBank.map((entry) => ({
       ...entry,
       explanation: cleanDisplayText(

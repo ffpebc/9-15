@@ -27,6 +27,7 @@ interface PresetsModalProps {
   onStartFipiTraps: () => void;
   onStartWeakestTaskWorkout: (taskId: TaskId) => void;
   onStartRealKimWorkout?: () => void;
+  onToggleShuffle?: () => void;
 }
 
 export const PresetsModal: React.FC<PresetsModalProps> = React.memo(({
@@ -38,6 +39,7 @@ export const PresetsModal: React.FC<PresetsModalProps> = React.memo(({
   onStartFipiTraps,
   onStartWeakestTaskWorkout,
   onStartRealKimWorkout,
+  onToggleShuffle,
 }) => {
   const weakestTask = useMemo<TaskId>(() => {
     let worstId: TaskId = '12';
@@ -203,6 +205,59 @@ export const PresetsModal: React.FC<PresetsModalProps> = React.memo(({
             Старт →
           </span>
         </button>
+      </div>
+
+      {/* Shuffle Mode Toggle */}
+      <div className="ios-section-header !px-1">Порядок заданий</div>
+      <div className="ios-inset-group !mb-2.5">
+        <div
+          id="preset-shuffle-toggle"
+          className="ios-cell cursor-pointer select-none"
+          onClick={onToggleShuffle}
+          role="switch"
+          aria-checked={state.isShuffled}
+          aria-label="Вразброс: перемешать задания"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onToggleShuffle?.();
+            }
+          }}
+        >
+          <div
+            className="ios-row-icon shrink-0 transition-colors duration-200"
+            style={{
+              background: state.isShuffled
+                ? 'linear-gradient(135deg, #0A84FF, #007AFF)'
+                : 'var(--ios-fill-tertiary)',
+              color: state.isShuffled ? '#FFFFFF' : 'var(--ios-label-sec)',
+            }}
+          >
+            <svg className="w-4 h-4 shrink-0">
+              <use href="#sf-shuffle" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0 pr-2">
+            <div className="text-[13.5px] font-bold tracking-[-0.2px] leading-tight text-[var(--ios-label)]">
+              Вразброс
+            </div>
+            <div
+              className="text-[11px] leading-tight truncate mt-0.5"
+              style={{ color: 'var(--ios-label-sec)' }}
+            >
+              {state.isShuffled
+                ? 'Случайный порядок (разные темы чередуются)'
+                : 'По порядку (сначала все 9, затем 10, 11...)'}
+            </div>
+          </div>
+          <div
+            className={`ios-switch shrink-0 ${state.isShuffled ? 'is-active' : ''}`}
+            aria-hidden="true"
+          >
+            <div className="ios-switch-knob" />
+          </div>
+        </div>
       </div>
 
       {/* Preset Quantities */}
