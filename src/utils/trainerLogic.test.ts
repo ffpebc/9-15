@@ -20,6 +20,7 @@ import {
   resolveTask15Sentence,
 } from './trainerLogic.ts';
 import { parseStructuredExplanation } from '../components/WorkWindows.tsx';
+import { classifyWordSubtopicAndException } from './wordClassifier.ts';
 
 test('FIPI bank generates sprint questions + FIPI sets + KIM variants + flashcards & homophones', () => {
   const bank = getTrainerBank();
@@ -547,7 +548,7 @@ test('Photos 1, 2, 3, 4, 5 regression tests & structured explanation sanitizatio
   assert.ok(fipi29683);
   const p3Row = fipi29683.rows.find((r) => r.words[0].includes('НАЗАВТРА') || r.words[0].includes('(НА)ЗАВТРА'));
   assert.ok(p3Row);
-  assert.equal(p3Row.letter, 'СЛИТНО');
+  assert.equal(p3Row.letter, 'СЛИТНО / СЛИТНО');
   assert.equal(p3Row.explanation.includes('через дефис'), false);
   assert.equal(p3Row.explanation.includes('ДЕФИС'), false);
 
@@ -696,6 +697,80 @@ test('TrainerState isShuffled flag encodes and restores accurately in backup cod
   const codeOn = encodeBackupCode(state);
   const restoredOn = decodeBackupCode(codeOn);
   assert.equal(restoredOn?.isShuffled, true);
+});
+
+test('Authoritative orthography regression tests (Color adjectives, ЮЛЯ, particles, conjunctions, homophones)', () => {
+  const bank = getTrainerBank();
+
+  // 1. Color shade adjectives: ТЁМНО-КОРИЧНЕВЫХ, ЯРКО-КРАСНЫМИ, ТЁМНО-СИНЕЙ
+  const darkBrownCls = classifyWordSubtopicAndException('14', 'тёмно', 'коричневых', 'ДЕФИСНО', 'оттенок цвета', 'в темно-коричневых волосах');
+  assert.equal(darkBrownCls.topic, 'Сложные прилагательные (через дефис)');
+  assert.ok(darkBrownCls.rule.includes('оттенки цветов') || darkBrownCls.rule.includes('через дефис'));
+
+  const fipi49776 = bank.fipiQuestions.find((q) => q.id === 'fipi-14-neofamily-14-49776');
+  assert.ok(fipi49776);
+  // Row 3: (КАК)БУДТО ... (ТЕМНО)КОРИЧНЕВЫХ -> РАЗДЕЛЬНО / ДЕФИСНО
+  assert.equal(fipi49776.rows[2].letter, 'РАЗДЕЛЬНО / ДЕФИСНО');
+  assert.ok(fipi49776.rows[2].solvedWords[0].includes('ТЁМНО-КОРИЧНЕВЫХ') || fipi49776.rows[2].solvedWords[0].includes('ТЕМНО-КОРИЧНЕВЫХ'));
+  assert.ok(fipi49776.rows[2].solvedWords[0].includes('КАК БУДТО'));
+
+  // Row 4: (ИЗ)ЗА ... (ВО)ВРЕМЯ урока -> ДЕФИСНО / РАЗДЕЛЬНО
+  assert.equal(fipi49776.rows[3].letter, 'ДЕФИСНО / РАЗДЕЛЬНО');
+  assert.ok(fipi49776.rows[3].solvedWords[0].includes('ИЗ-ЗА'));
+  assert.ok(fipi49776.rows[3].solvedWords[0].includes('ВО ВРЕМЯ'));
+
+  // Row 5: (ПО)ЗИМНЕМУ городу ... (ЗА)ТО весело -> РАЗДЕЛЬНО / СЛИТНО
+  assert.equal(fipi49776.rows[4].letter, 'РАЗДЕЛЬНО / СЛИТНО');
+  assert.ok(fipi49776.rows[4].solvedWords[0].includes('ПО ЗИМНЕМУ'));
+  assert.ok(fipi49776.rows[4].solvedWords[0].includes('ЗАТО'));
+
+  // 2. Rule of ЮЛЯ and -КА particles in Task 14
+  const fipi49389 = bank.fipiQuestions.find((q) => q.id === 'fipi-14-neofamily-14-49389');
+  assert.ok(fipi49389);
+  // Row 2: (ПОЛ)ЯЩИКА (ЯРКО)ОРАНЖЕВЫХ -> ДЕФИСНО / ДЕФИСНО
+  assert.equal(fipi49389.rows[1].letter, 'ДЕФИСНО / ДЕФИСНО');
+  assert.equal(fipi49389.rows[1].isCorrectRow, true);
+  // Row 5: (ПО)ЗИМНЕМУ морозно ... (КОЕ)ГДЕ -> ДЕФИСНО / ДЕФИСНО
+  assert.equal(fipi49389.rows[4].letter, 'ДЕФИСНО / ДЕФИСНО');
+  assert.equal(fipi49389.rows[4].isCorrectRow, true);
+  assert.deepEqual(fipi49389.correctIndices, [2, 5]);
+
+  // 3. Task 130928: ЧТО-ТО, ПО-СВОЕМУ, ИЗ-ПОД
+  const fipi130928 = bank.fipiQuestions.find((q) => q.id === 'fipi-14-shkolkovo-14-130928');
+  assert.ok(fipi130928);
+  // Row 1: ИЗ-ЗА ... ПОЛ-ЛИМОНА -> ДЕФИСНО / ДЕФИСНО (True)
+  assert.equal(fipi130928.rows[0].letter, 'ДЕФИСНО / ДЕФИСНО');
+  assert.equal(fipi130928.rows[0].isCorrectRow, true);
+  // Row 2: ЧТО-ТО ... ПО-СВОЕМУ -> ДЕФИСНО / ДЕФИСНО (True)
+  assert.equal(fipi130928.rows[1].letter, 'ДЕФИСНО / ДЕФИСНО');
+  assert.equal(fipi130928.rows[1].isCorrectRow, true);
+  // Row 5: ОТКУДА-ТО ... ИЗ-ПОД -> ДЕФИСНО / ДЕФИСНО (True)
+  assert.equal(fipi130928.rows[4].letter, 'ДЕФИСНО / ДЕФИСНО');
+  assert.equal(fipi130928.rows[4].isCorrectRow, true);
+  assert.deepEqual(fipi130928.correctIndices, [1, 2, 5]);
+
+  // 4. Sprint bank word checks
+  for (const s of bank.sprintQuestions) {
+    const raw = `${s.prefix || ''}${s.suffix || ''}`.replace(/[()]/g, '').trim().toUpperCase();
+    if (raw === 'КАК БУДТО' || raw === 'КАКБУДТО') {
+      assert.equal(s.answer, 'РАЗДЕЛЬНО');
+    }
+    if (raw === 'ЧТОТО' || raw === 'ЧТО-ТО') {
+      assert.equal(s.answer, 'ДЕФИСНО');
+    }
+    if (raw === 'КОЕГДЕ' || raw === 'КОЕ-ГДЕ') {
+      assert.equal(s.answer, 'ДЕФИСНО');
+    }
+    if (raw === 'ПОДХОДИТЕКА' || raw === 'ПОДХОДИТЕ-КА') {
+      assert.equal(s.answer, 'ДЕФИСНО');
+    }
+    if (raw === 'ПОЛЯЩИКА' || raw === 'ПОЛ-ЯЩИКА') {
+      assert.equal(s.answer, 'ДЕФИСНО');
+    }
+    if (raw === 'ПОЛЛИМОНА' || raw === 'ПОЛ-ЛИМОНА') {
+      assert.equal(s.answer, 'ДЕФИСНО');
+    }
+  }
 });
 
 
